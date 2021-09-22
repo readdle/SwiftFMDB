@@ -3,7 +3,7 @@
     "pins": [
       {
         "package": "swift-log",
-        "repositoryURL": "https://github.com/readdle/swift-log",
+        "repositoryURL": "https://github.com/readdle/swift-log.git",
         "state": {
           "branch": "main",
           "revision": "e146e91787b04cc8f0ed05a21ce3cb9b214d5dbb",
