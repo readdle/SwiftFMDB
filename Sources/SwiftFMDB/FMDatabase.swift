@@ -408,6 +408,17 @@ public final class FMDatabase: NSObject {
                 let swiftError = String(cString: sqlite3_errmsg(db))
                 let extendedCode = sqlite3_extended_errcode(db)
                 logger.error("Unknown error calling sqlite3_step (\(rc): \(swiftError)) eu, Extended Code = \(extendedCode), DB Query: \(sql)")
+                if rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT, let dbCorruptionHandler = dbCorruptionHandler {
+                    dbCorruptionHandler(sql)
+                }
+                if crashOnErrors {
+                    assert(false, "DB Error: \(String(describing: self.lastErrorCode())) \"\(String(describing: self.lastErrorMessage()))\"")
+                    abort()
+                }
+                sqlite3_finalize(pStmt)
+                outErr = self.lastError()
+                isExecutingStatement = false
+                return false
             }
         }
         if rc == SQLITE_ROW {
