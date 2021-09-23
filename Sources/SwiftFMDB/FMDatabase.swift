@@ -1025,12 +1025,6 @@ public final class FMDatabase: NSObject {
      @see lastErrorMessage
      
      */
-    
-//    public var lastError: NSError? {
-//        let errorMessage = [NSLocalizedDescriptionKey: lastErrorMessage() ?? ""]
-//        return NSError(domain: "FMDatabase", code: Int(sqlite3_errcode(db)), userInfo: errorMessage)
-//    }
-    
     public func lastError() -> NSError? {
         let errorMessage = [NSLocalizedDescriptionKey: lastErrorMessage() ?? ""]
         return NSError(domain: "FMDatabase", code: Int(sqlite3_errcode(db)), userInfo: errorMessage)

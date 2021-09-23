@@ -7,6 +7,7 @@ public func allTests() -> [XCTestCaseEntry] {
         testCase(SCDatabaseQueueTests.allTests),
         testCase(SCDatabasePoolTests.allTests),
         testCase(SCDatabaseAdditionsTests.allTests),
+        testCase(SQLiteTests.allTests),
     ]
 }
 #endif
