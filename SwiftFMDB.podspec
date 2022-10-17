@@ -1,7 +1,7 @@
 Pod::Spec.new do |s|
 
   s.name         = "SwiftFMDB"
-  s.version      = "1.0.0"
+  s.version      = "1.0.2"
   s.summary      = "SwiftFMDB"
   s.description  = <<-DESC
                   SwiftFMDB
@@ -19,5 +19,7 @@ Pod::Spec.new do |s|
 
   s.dependency 'RDSQLite3'
   s.dependency 'Logging'
+
+  s.xcconfig = {'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) SQLITE_ENABLE_NORMALIZE' }
 
 end
