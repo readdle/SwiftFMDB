@@ -19,6 +19,7 @@ private let kDispatchQueueSpecificKey = DispatchSpecificKey<FMDatabaseQueue>()
 private let logger = Logger(label: "FMDatabaseQueue")
 
 @objc(FMCoreDatabaseQueue)
+@objcMembers
 open class FMDatabaseQueue: NSObject {
     
     public var timeLoggingEnabled: Bool = false
@@ -327,7 +328,7 @@ open class FMDatabaseQueue: NSObject {
     func execute(inTransaction block: @escaping (_ db: FMDatabase, _ rollback: inout Bool) -> Void, db: FMDatabase) {
         var souldBeginTran: Bool = inTran == false
         if readonly {
-            logger.error("readonly, transactin is ignored")
+            logger.error("readonly, transaction is ignored")
             souldBeginTran = false
         }
         if souldBeginTran {

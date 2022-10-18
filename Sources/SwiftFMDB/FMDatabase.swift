@@ -83,6 +83,7 @@ public enum FMDatabaseError: Int, Error {
  @warning Do not instantiate a single `FMDatabase` object and use it across multiple threads. Instead, use `<FMDatabaseQueue>`.
  
  */
+@objcMembers 
 public final class FMDatabase: NSObject {
     
     fileprivate var isExecutingStatement: Bool = false
@@ -378,7 +379,12 @@ public final class FMDatabase: NSObject {
         }
         if idx != queryCount {
             logger.error("Error: the bind count (\(idx)) is not correct for the # of variables in the query (\(queryCount)) (\(sql)) (executeUpdate)")
-            sqlite3_finalize(pStmt)
+            if let cachedStmt = cachedStmt {
+                cachedStmt.reset()
+            }
+            else {
+                sqlite3_finalize(pStmt)
+            }
             isExecutingStatement = false
             return false
         }
@@ -408,18 +414,25 @@ public final class FMDatabase: NSObject {
                 let swiftError = String(cString: sqlite3_errmsg(db))
                 let extendedCode = sqlite3_extended_errcode(db)
                 logger.error("Unknown error calling sqlite3_step (\(rc): \(swiftError)) eu, Extended Code = \(extendedCode), DB Query: \(sql)")
-                if rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT, let dbCorruptionHandler = dbCorruptionHandler {
-                    dbCorruptionHandler(sql)
-                }
-                if crashOnErrors {
-                    assert(false, "DB Error: \(String(describing: self.lastErrorCode())) \"\(String(describing: self.lastErrorMessage()))\"")
-                    abort()
-                }
-                sqlite3_finalize(pStmt)
-                outErr = self.lastError()
-                isExecutingStatement = false
-                return false
             }
+            if rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT, let dbCorruptionHandler = dbCorruptionHandler {
+                dbCorruptionHandler(sql)
+            }
+            if crashOnErrors {
+                assert(false, "DB Error: \(String(describing: self.lastErrorCode())) \"\(String(describing: self.lastErrorMessage()))\"")
+                abort()
+            }
+            
+            if let cachedStmt = cachedStmt {
+                cachedStmt.reset()
+            }
+            else {
+                sqlite3_finalize(pStmt)
+            }
+            
+            outErr = self.lastError()
+            isExecutingStatement = false
+            return false
         }
         if rc == SQLITE_ROW {
             assert(false, "A executeUpdate is being called with a query string '\(sql)'")
@@ -695,7 +708,13 @@ public final class FMDatabase: NSObject {
         }
         if idx != queryCount {
             logger.error("Error: the bind count is not correct for the # of variables (executeQuery)")
-            sqlite3_finalize(pStmt)
+            
+            if let statement = statement {
+                statement.reset()
+            }
+            else {
+                sqlite3_finalize(pStmt)
+            }
             isExecutingStatement = false
             return nil
         }

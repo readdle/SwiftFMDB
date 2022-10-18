@@ -11,14 +11,14 @@ import Foundation
 import XCTest
 
 #if os(Android)
-    let testDatabasePath = "/data/local/tmp/tmp.db"
-    let populatedDatabasePath = "/data/local/tmp/tmp-populated.db"
+    private let testDatabasePath = "/data/local/tmp/tmp.db"
+    private let populatedDatabasePath = "/data/local/tmp/tmp-populated.db"
 #elseif os(Windows)
-    let testDatabasePath = FileManager.default.temporaryDirectory.appendingPathComponent("tmp.db").path
-    let populatedDatabasePath = FileManager.default.temporaryDirectory.appendingPathComponent("tmp-populated.db").path
+    private let testDatabasePath = FileManager.default.temporaryDirectory.appendingPathComponent("tmp.db").path
+    private let populatedDatabasePath = FileManager.default.temporaryDirectory.appendingPathComponent("tmp-populated.db").path
 #else
-    let testDatabasePath = "/tmp/tmp.db"
-    let populatedDatabasePath = "/tmp/tmp-populated.db"
+    private let testDatabasePath = "/private/tmp/tmp.db"
+    private let populatedDatabasePath = "/tmp/tmp-populated.db"
 #endif
 
 // sourcery: disableTests

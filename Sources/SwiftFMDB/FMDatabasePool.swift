@@ -40,6 +40,7 @@ public protocol FMDatabasePoolDelegate {
 }
 
 @objc(RSMFMDatabasePool)
+@objcMembers
 public final class FMDatabasePool: NSObject {
     
     /** Database path */

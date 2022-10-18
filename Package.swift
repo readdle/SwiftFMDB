@@ -12,8 +12,8 @@ let package = Package(
             targets: ["SwiftFMDB"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/readdle/swift-sqlite-prebuilt.git", .exact("3.28.0")),
-        .package(url: "https://github.com/readdle/swift-log.git", .branch("main")),
+        .package(url: "https://github.com/readdle/swift-sqlite-prebuilt.git", .exact("3.39.0")),
+        .package(url: "https://github.com/apple/swift-log.git", .upToNextMinor(from: "1.4.4")),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
