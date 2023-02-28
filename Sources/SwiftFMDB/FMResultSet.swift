@@ -8,8 +8,9 @@
 
 import Foundation
 import Logging
-#if os(Android) || os(Windows)
-import sqlite
+
+#if SWIFT_PACKAGE
+import SQLite
 #else
 import RDSQLite3
 #endif

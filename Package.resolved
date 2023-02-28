@@ -1,0 +1,25 @@
+{
+  "object": {
+    "pins": [
+      {
+        "package": "swift-log",
+        "repositoryURL": "https://github.com/apple/swift-log.git",
+        "state": {
+          "branch": null,
+          "revision": "6fe203dc33195667ce1759bf0182975e4653ba1c",
+          "version": "1.4.4"
+        }
+      },
+      {
+        "package": "SQLite",
+        "repositoryURL": "https://github.com/readdle/swift-sqlite",
+        "state": {
+          "branch": null,
+          "revision": "13e7c9e7dce5a6c781050f0864e7243461a2f0c8",
+          "version": "3.39.4"
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -1,28 +1,27 @@
-// swift-tools-version:5.0
+// swift-tools-version:5.4
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import Foundation
 import PackageDescription
 
 let package = Package(
     name: "SwiftFMDB",
     products: [
-        // Products define the executables and libraries produced by a package, and make them visible to other packages.
-        .library(
-            name: "SwiftFMDB",
-            targets: ["SwiftFMDB"]),
+        .library(name: "SwiftFMDB", targets: ["SwiftFMDB"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/readdle/swift-sqlite-prebuilt.git", .exact("3.39.0")),
         .package(url: "https://github.com/apple/swift-log.git", .upToNextMinor(from: "1.4.4")),
+        .package(name: "SQLite", url: "https://github.com/readdle/swift-sqlite", .upToNextMinor(from: "3.39.4"))
     ],
     targets: [
-        // Targets are the basic building blocks of a package. A target can define a module or a test suite.
-        // Targets can depend on other targets in this package, and on products in packages which this package depends on.
-        .target(
-            name: "SwiftFMDB",
-            dependencies: ["Logging"]),
-        .testTarget(
-            name: "SwiftFMDBTests",
-            dependencies: ["SwiftFMDB"]),
+        .target(name: "SwiftFMDB",
+                dependencies: [
+                    "SQLite",
+                    .product(name: "Logging", package: "swift-log")
+                ],
+                cSettings: [
+                    .define("SQLITE_ENABLE_NORMALIZE", to: "1")
+                ]),
+        .testTarget(name: "SwiftFMDBTests", dependencies: ["SwiftFMDB"]),
     ]
 )
