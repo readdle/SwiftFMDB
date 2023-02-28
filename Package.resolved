@@ -11,11 +11,11 @@
         }
       },
       {
-        "package": "SQLite",
-        "repositoryURL": "https://github.com/readdle/swift-sqlite",
+        "package": "SQLiteEE",
+        "repositoryURL": "git@github.com:readdle/swift-sqlite-ee.git",
         "state": {
           "branch": null,
-          "revision": "13e7c9e7dce5a6c781050f0864e7243461a2f0c8",
+          "revision": "662f1da8cee584c71d3be963bd06b766f29cfde1",
           "version": "3.39.4"
         }
       }

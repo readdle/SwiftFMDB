@@ -11,12 +11,12 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", .upToNextMinor(from: "1.4.4")),
-        .package(name: "SQLite", url: "https://github.com/readdle/swift-sqlite", .upToNextMinor(from: "3.39.4"))
+        .package(name: "SQLiteEE", url: "git@github.com:readdle/swift-sqlite-ee.git", .upToNextMinor(from: "3.39.4"))
     ],
     targets: [
         .target(name: "SwiftFMDB",
                 dependencies: [
-                    "SQLite",
+                    "SQLiteEE",
                     .product(name: "Logging", package: "swift-log")
                 ],
                 cSettings: [

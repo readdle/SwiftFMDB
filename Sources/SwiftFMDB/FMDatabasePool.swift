@@ -11,7 +11,7 @@ import Foundation
 import Logging
 
 #if SWIFT_PACKAGE
-import SQLite
+import SQLiteEE
 #else
 import RDSQLite3
 #endif

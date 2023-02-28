@@ -10,7 +10,7 @@ import Foundation
 @testable import SwiftFMDB
 import XCTest
 #if SWIFT_PACKAGE
-import SQLite
+import SQLiteEE
 #else
 import RDSQLite3
 #endif
