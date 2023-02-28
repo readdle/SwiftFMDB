@@ -60,6 +60,10 @@ public enum FMDatabaseError: Int, Error {
     /* custom error codes */
     case SQLITE_DB_NOTFOUND  = 1001
 }
+
+private enum FMDatabaseExtendedErrorCode: Int32 {
+    case SQLITE_CORRUPT_INDEX   = 779
+}
 // swiftlint:enable operator_usage_whitespace
 
 /** A SQLite ([http://sqlite.org/](http://sqlite.org/)) Swift wrapper.
@@ -106,6 +110,9 @@ public final class FMDatabase: NSObject {
     public var crashOnErrors: Bool
     
     /** Database corruption handler */
+    public var longQueryHandler: ((_ query: String, _ time: TimeInterval) -> Void)?
+    public var indexCorruptionRecoveryHandler: ((_ time: TimeInterval) -> Void)?
+    public var indexCorruptionFailedRecoveryHandler: (() -> Void)?
     public var dbCorruptionHandler: ((_ query: String) -> Void)?
     
     /** Logs errors */
@@ -392,52 +399,83 @@ public final class FMDatabase: NSObject {
         /* Call sqlite3_step() to run the virtual machine. Since the SQL being
          ** executed is not a SELECT statement, we assume no data will be returned.
          */
-        rc = sqlite3_step(pStmt)
-        if SQLITE_DONE == rc {
-            // all is well, let's return.
-        }
-        else if SQLITE_ERROR == rc {
-            if logsErrors {
-                let swiftError = String(cString: sqlite3_errmsg(db))
-                logger.error("Error calling sqlite3_step (\(rc): \(swiftError)) SQLITE_ERROR, DB Query : \(sql)")
+
+        var attemptedToRecoverIndexes = false
+        var shouldStep = true
+
+        while shouldStep {
+            shouldStep = false
+
+            rc = sqlite3_step(pStmt)
+            if SQLITE_DONE == rc {
+                // all is well, let's return.
             }
-        }
-        else if SQLITE_MISUSE == rc {
-            // uh oh.
-            if logsErrors {
-                let swiftError = String(cString: sqlite3_errmsg(db))
-                logger.error("Error calling sqlite3_step (\(rc): \(swiftError)) SQLITE_MISUSE, DB Query: \(sql)")
+            else if SQLITE_ERROR == rc {
+                if logsErrors {
+                    let swiftError = String(cString: sqlite3_errmsg(db))
+                    logger.error("Error calling sqlite3_step (\(rc): \(swiftError)) SQLITE_ERROR, DB Query : \(sql)")
+                }
             }
-        }
-        else {
-            // wtf?
-            if logsErrors {
-                let swiftError = String(cString: sqlite3_errmsg(db))
-                let extendedCode = sqlite3_extended_errcode(db)
-                logger.error("Unknown error calling sqlite3_step (\(rc): \(swiftError)) eu, Extended Code = \(extendedCode), DB Query: \(sql)")
-            }
-            if rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT, let dbCorruptionHandler = dbCorruptionHandler {
-                dbCorruptionHandler(sql)
-            }
-            if crashOnErrors {
-                assert(false, "DB Error: \(String(describing: self.lastErrorCode())) \"\(String(describing: self.lastErrorMessage()))\"")
-                abort()
-            }
-            
-            if let cachedStmt = cachedStmt {
-                cachedStmt.reset()
+            else if SQLITE_MISUSE == rc {
+                // uh oh.
+                if logsErrors {
+                    let swiftError = String(cString: sqlite3_errmsg(db))
+                    logger.error("Error calling sqlite3_step (\(rc): \(swiftError)) SQLITE_MISUSE, DB Query: \(sql)")
+                }
             }
             else {
-                sqlite3_finalize(pStmt)
+                let extendedCode = sqlite3_extended_errcode(db)
+                let isIndexCorruption = SQLITE_CORRUPT == rc && extendedCode == FMDatabaseExtendedErrorCode.SQLITE_CORRUPT_INDEX.rawValue
+                if isIndexCorruption {
+                    if logsErrors {
+                        let swiftError = String(cString: sqlite3_errmsg(db))
+                        logger.error("Index corrupted calling sqlite3_step (\(rc): \(swiftError)) eu, Extended Code = \(extendedCode), DB Query: \(sql)")
+                    }
+
+                    if attemptedToRecoverIndexes == false {
+                        attemptedToRecoverIndexes = true
+
+                        if attemptRecoverIndexes() {
+                            sqlite3_reset(pStmt)
+                            shouldStep = true
+                            continue
+                        }
+                    }
+                    else {
+                        logger.info("Attempt to recover indexes failed. Skipping another attempt to avoid infinite loop.")
+                        indexCorruptionFailedRecoveryHandler?()
+                    }
+                }
+
+                // wtf?
+                if logsErrors {
+                    let swiftError = String(cString: sqlite3_errmsg(db))
+                    logger.error("Unknown error calling sqlite3_step (\(rc): \(swiftError)) eu, Extended Code = \(extendedCode), DB Query: \(sql)")
+                }
+                if rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT, let dbCorruptionHandler = dbCorruptionHandler {
+                    dbCorruptionHandler(sql)
+                }
+                if crashOnErrors {
+                    assert(false, "DB Error: \(String(describing: self.lastErrorCode())) \"\(String(describing: self.lastErrorMessage()))\"")
+                    abort()
+                }
+
+                if let cachedStmt = cachedStmt {
+                    cachedStmt.reset()
+                }
+                else {
+                    sqlite3_finalize(pStmt)
+                }
+
+                outErr = self.lastError()
+                isExecutingStatement = false
+                return false
             }
-            
-            outErr = self.lastError()
-            isExecutingStatement = false
-            return false
+            if rc == SQLITE_ROW {
+                assert(false, "A executeUpdate is being called with a query string '\(sql)'")
+            }
         }
-        if rc == SQLITE_ROW {
-            assert(false, "A executeUpdate is being called with a query string '\(sql)'")
-        }
+
         if cached && cachedStmt == nil {
             cachedStmt = FMStatement()
             cachedStmt?.statement = pStmt
@@ -464,7 +502,9 @@ public final class FMDatabase: NSObject {
         
         let t2 = Date.timeIntervalSinceReferenceDate
         let diff = t2 - t1
-        if diff > 0.1 {
+        if diff > 0.1 && !attemptedToRecoverIndexes {
+            longQueryHandler?(sql, diff)
+         
             if Thread.isMainThread {
                 logger.info("Query is executed too long (main thread), time: \(diff) sec query:\n\(sql)")
             }
@@ -474,6 +514,42 @@ public final class FMDatabase: NSObject {
         }
         
         return (rc == SQLITE_DONE || rc == SQLITE_OK)
+    }
+
+    private func attemptRecoverIndexes() -> Bool {
+        var pStmt: OpaquePointer?
+        defer { sqlite3_finalize(pStmt) }
+
+        let start = Date.timeIntervalSinceReferenceDate
+        let prepareRC = sqlite3_prepare_v2(db, "REINDEX", -1, &pStmt, nil)
+        guard SQLITE_OK == prepareRC else {
+            if logsErrors {
+                let swiftError = String(cString: sqlite3_errmsg(db))
+                let extendedCode = sqlite3_extended_errcode(db)
+                logger.error("Failed to prepare reindex statement (\(prepareRC): \(swiftError)) eu, Extended Code = \(extendedCode)")
+            }
+
+            indexCorruptionFailedRecoveryHandler?()
+            return false
+        }
+
+        let stepRC = sqlite3_step(pStmt)
+        guard SQLITE_DONE == stepRC else {
+            if logsErrors {
+                let swiftError = String(cString: sqlite3_errmsg(db))
+                let extendedCode = sqlite3_extended_errcode(db)
+                logger.error("Failed to execute reindex statement (\(stepRC): \(swiftError)) eu, Extended Code = \(extendedCode)")
+            }
+
+            indexCorruptionFailedRecoveryHandler?()
+            return false
+        }
+
+        let end = Date.timeIntervalSinceReferenceDate
+        let duration = end - start
+        logger.info("Corrupted index recovery took: \(duration) seconds")
+        indexCorruptionRecoveryHandler?(duration)
+        return true
     }
     
     /** Execute single update statement

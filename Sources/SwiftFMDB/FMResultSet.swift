@@ -98,6 +98,8 @@ public final class FMResultSet: NSObject {
         let t2 = Date.timeIntervalSinceReferenceDate
         let diff = t2 - t1
         if diff > 0.1 {
+            parentDB.longQueryHandler?(query ?? "", diff)
+            
             if Thread.isMainThread {
                 logger.info("Query is executed too long (main thread), time: \(diff) sec query:\n\(query ?? "---"))")
             }

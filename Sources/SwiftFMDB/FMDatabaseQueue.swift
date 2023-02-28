@@ -32,25 +32,43 @@ open class FMDatabaseQueue: NSObject {
     
     open var db: FMDatabase? {
         didSet {
-            updateCorruptionHandler()
+            updateDBHandlers()
         }
     }
     
-    public var dbLongQueryHandler: ((_ query: String, _ time: TimeInterval) -> Void)?
+    public var longQueryHandler: ((_ query: String, _ time: TimeInterval) -> Void)? {
+        didSet {
+            updateDBHandlers()
+        }
+    }
     
-    /** Database corruption handler */
+    public var indexCorruptionRecoveryHandler: ((_ time: TimeInterval) -> Void)? {
+        didSet {
+            updateDBHandlers()
+        }
+    }
+    
+    public var indexCorruptionFailedRecoveryHandler: (() -> Void)? {
+        didSet {
+            updateDBHandlers()
+        }
+    }
+    
     public var dbCorruptionHandler: ((_ query: String) -> Void)? {
         didSet {
-            updateCorruptionHandler()
+            updateDBHandlers()
         }
     }
     
-    private func updateCorruptionHandler() {
+    private func updateDBHandlers() {
         guard db != nil else {
             return
         }
         inDatabase { db in
-            db.dbCorruptionHandler = self.dbCorruptionHandler
+            db.longQueryHandler = self.longQueryHandler
+            db.indexCorruptionRecoveryHandler = self.indexCorruptionRecoveryHandler
+            db.indexCorruptionFailedRecoveryHandler = self.indexCorruptionFailedRecoveryHandler
+            db.dbCorruptionHandler = self.dbCorruptionHandler 
         }
     }
     
@@ -278,16 +296,13 @@ open class FMDatabaseQueue: NSObject {
         if executionTime > 0.1 {
             if Thread.isMainThread {
                 logger.info("Db block is executed too long (main thread), time: \(Float(executionTime))sec stack:\n\(getCallStackSymbols())")
-                dbLongQueryHandler?(getCallStackSymbols(), executionTime)
             }
             else if executionTime > 3 {
                 logger.info("Db block is executed too long (back thread), time: \(Float(executionTime))sec stack:\n\(getCallStackSymbols())")
-                dbLongQueryHandler?(getCallStackSymbols(), executionTime)
             }
         }
         else if waitingTime > 0.1 && Thread.isMainThread {
             logger.info("Db block was in wait too long (main thread), time: \(Float(executionTime))sec stack:\n\(getCallStackSymbols())")
-            dbLongQueryHandler?(getCallStackSymbols(), executionTime)
         }
     }
     
