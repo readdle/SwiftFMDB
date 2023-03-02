@@ -189,6 +189,7 @@ public class SCDatabaseTest: SCDBTempDBTests {
         db.maxBusyRetryTimeInterval = 2
         let newDB = FMDatabase(path: databasePath)
         XCTAssertTrue(newDB.open())
+        _ = newDB.setKey(encryptionKey)
         if let rs = newDB.executeQuery(cached: false, "select rowid,* from test where a = ?", "hi'") {
             _ = rs.next() // just grab one... which will keep the db locked
             XCTAssertFalse(db.executeUpdate(cached: false, "insert into t1 values (5)"), "Insert should fail because the db is locked by a read")
@@ -529,7 +530,7 @@ public class SCDatabaseTest: SCDBTempDBTests {
         XCTAssertTrue(dbB.executeUpdate(cached: false, "create table attached (a text)"))
         XCTAssertTrue((dbB.executeUpdate(cached: false, "insert into attached values (?)", "test")))
         XCTAssertTrue(dbB.close())
-        XCTAssertTrue(db.executeUpdate(cached: false, "attach database '\(atachmeDbPath)' as attack"))
+        XCTAssertTrue(db.executeUpdate(cached: false, "attach database '\(atachmeDbPath)' as attack key ''"))
         if let rs = db.executeQuery(cached: false, "select * from attack.attached") {
             XCTAssertTrue(rs.next())
             rs.close()
