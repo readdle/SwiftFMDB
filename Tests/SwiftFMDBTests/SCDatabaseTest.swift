@@ -58,6 +58,14 @@ public class SCDatabaseTest: SCDBTempDBTests {
         _ = db.commit()
     }
     
+    func testFailOnInvalidKey() {
+        _ = db.close()
+        _ = db.open()
+        _ = db.setKey("Invalid key")
+        XCTAssertNil(db.executeQuery(cached: false, "select * from table"), "Shouldn't get results from an empty table")
+        XCTAssertTrue(db.hadError(), "Should have failed")
+    }
+    
     func testFailOnUnopenedDatabase() {
         _ = db.close()
         XCTAssertNil(db.executeQuery(cached: false, "select * from table"), "Shouldn't get results from an empty table")
@@ -79,6 +87,24 @@ public class SCDatabaseTest: SCDBTempDBTests {
         #else
         XCTAssertEqual((error as NSError?)?.code ?? 0, Int(SQLITE_ERROR), "Error should be SQLITE_ERROR")
         #endif
+    }
+    
+    func testRekey() {
+        let newKey = "New key"
+        _ = db.rekey(newKey)
+        _ = db.close()
+        _ = db.open()
+        _ = db.setKey(newKey)
+        XCTAssertTrue(db.executeUpdate(cached: false, "create table t1 (a integer)"))
+        XCTAssertFalse(db.hadError(), "Rekey should have succeeded")
+    }
+    
+    func testDecrypt() {
+        _ = db.rekey(withData: nil)
+        _ = db.close()
+        _ = db.open()
+        XCTAssertTrue(db.executeUpdate(cached: false, "create table t1 (a integer)"))
+        XCTAssertFalse(db.hadError(), "Rekey should have succeeded")
     }
     
     func testPragmaJournalMode() {
@@ -722,9 +748,12 @@ public class SCDatabaseTest: SCDBTempDBTests {
     }
 
     public static var allTests = [
+        ("testFailOnInvalidKey", testFailOnInvalidKey),
         ("testFailOnUnopenedDatabase", testFailOnUnopenedDatabase),
         ("testFailOnBadStatement", testFailOnBadStatement),
         ("testFailOnBadStatementWithError", testFailOnBadStatementWithError),
+        ("testRekey", testRekey),
+        ("testDecrypt", testDecrypt),
         ("testPragmaJournalMode", testPragmaJournalMode),
         ("testPragmaPageSize", testPragmaPageSize),
         ("testVacuum", testVacuum),
