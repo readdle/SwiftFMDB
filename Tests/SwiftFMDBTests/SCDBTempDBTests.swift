@@ -21,6 +21,8 @@ import XCTest
     private let populatedDatabasePath = "/tmp/tmp-populated.db"
 #endif
 
+let encryptionKey = "encryption key"
+
 // sourcery: disableTests
 public class SCDBTempDBTests: XCTestCase {
     
@@ -45,6 +47,7 @@ public class SCDBTempDBTests: XCTestCase {
         try? fileManager.removeItem(atPath: populatedDatabasePath)
         let db = FMDatabase(path: populatedDatabasePath)
         _ = db.open()
+        _ = db.setKey(encryptionKey)
         populateDatabase(db)
         _ = db.close()
     }
@@ -60,6 +63,7 @@ public class SCDBTempDBTests: XCTestCase {
         try! fileManager.copyItem(atPath: populatedDatabasePath, toPath: testDatabasePath)
         db = FMDatabase(path: testDatabasePath)
         XCTAssertTrue(db.open(), "Wasn't able to open database")
+        _ = db.setKey(encryptionKey)
     }
     
     public override func tearDown() {
