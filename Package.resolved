@@ -15,8 +15,8 @@
         "repositoryURL": "git@github.com:readdle/swift-sqlite-ee.git",
         "state": {
           "branch": null,
-          "revision": "5f5f0b2926b27752c2673df1cd06bfadaaff6f48",
-          "version": "3.39.5"
+          "revision": "3b74b707b2f31e9f388102592be9657a2d3c817c",
+          "version": "3.39.4"
         }
       }
     ]
