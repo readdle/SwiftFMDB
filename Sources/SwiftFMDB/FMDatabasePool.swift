@@ -53,6 +53,9 @@ public final class FMDatabasePool: NSObject {
     /** Maximum number of databases to create */
     public var maximumNumberOfDatabasesToCreate: Int = 0
     
+    /** Database encryption key */
+    private let key: Data?
+    
     /** Open flags */
     public private(set) var openFlags: Int32
     
@@ -65,44 +68,50 @@ public final class FMDatabasePool: NSObject {
     /** Create pool using path.
      
      @param aPath The file path of the database.
+     @param key The encryption key of the database.
      
      @return The `FMDatabasePool` object. `nil` on error.
      */
-    public static func databasePool(withPath aPath: String) -> FMDatabasePool {
-        return FMDatabasePool(path: aPath)
+    public static func databasePool(withPath aPath: String, key: String?) -> FMDatabasePool {
+        return FMDatabasePool(path: aPath, key: key)
     }
     
     /** Create pool using path and specified flags
      
      @param aPath The file path of the database.
      @param openFlags Flags passed to the openWithFlags method of the database
+     @param key The encryption key of the database.
      
      @return The `FMDatabasePool` object. `nil` on error.
      */
-    public static func databasePool(withPath aPath: String, flags openFlags: Int32) -> FMDatabasePool {
-        return FMDatabasePool(path: aPath, flags: openFlags)
+    public static func databasePool(withPath aPath: String, flags openFlags: Int32, key: Data? = nil) -> FMDatabasePool {
+        return FMDatabasePool(path: aPath, flags: openFlags, key: key)
     }
     
     /** Create pool using path.
      
      @param aPath The file path of the database.
      
+     @param key The encryption key of the database.
+     
      @return The `FMDatabasePool` object. `nil` on error.
      */
-    public convenience init(path aPath: String) {
+    public convenience init(path aPath: String, key: String? = nil) {
         // default flags for sqlite3_open
-        self.init(path: aPath, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE)
+        self.init(path: aPath, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, key: key?.data(using: .utf8))
     }
     
     /** Create pool using path and specified flags.
      
      @param aPath The file path of the database.
+     @param key The encryption key of the database.
      @param openFlags Flags passed to the openWithFlags method of the database
      
      @return The `FMDatabasePool` object. `nil` on error.
      */
-    public init(path aPath: String, flags openFlags: Int32) {
+    public init(path aPath: String, flags openFlags: Int32, key: Data? = nil) {
         self.path = aPath
+        self.key = key
         self.lockQueue = DispatchQueue(label: "fmdb.self")
         self.databaseInPool = [FMDatabase]()
         self.databaseOutPool = [FMDatabase]()
@@ -279,12 +288,19 @@ public final class FMDatabasePool: NSObject {
                     db = nil
                 }
                 else {
-                    //It should not get added in the pool twice if lastObject was found
-                    if databaseOutPool.contains(where: { $0 === db }) == false {
-                        databaseOutPool.append(db!)
-                        if shouldNotifyDelegate {
-                            delegate?.databasePool(self, didAdd: db!)
+                    let ok = db?.setKey(withData: key)
+                    if ok == true {
+                        //It should not get added in the pool twice if lastObject was found
+                        if databaseOutPool.contains(where: { $0 === db }) == false {
+                            databaseOutPool.append(db!)
+                            if shouldNotifyDelegate {
+                                delegate?.databasePool(self, didAdd: db!)
+                            }
                         }
+                    }
+                    else {
+                        _ = db?.close()
+                        db = nil
                     }
                 }
             }

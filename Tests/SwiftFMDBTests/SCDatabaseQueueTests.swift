@@ -24,7 +24,7 @@ class SCDatabaseQueueTests: SCDBTempDBTests {
         super.setUp()
         // Put setup code here. This method is called before the invocation of each test method in the class.
         
-        queue = FMDatabaseQueue(withPath: databasePath)!
+        queue = FMDatabaseQueue(withPath: databasePath, key: encryptionKey)!
     }
     
     override func tearDown() {
@@ -68,7 +68,9 @@ class SCDatabaseQueueTests: SCDBTempDBTests {
     }
     
     func testReadOnlyQueue() {
-        guard let queue2 = FMDatabaseQueue(withPath: databasePath, flags: SQLITE_OPEN_READONLY) else {
+        guard let queue2 = FMDatabaseQueue(withPath: databasePath,
+                                           flags: SQLITE_OPEN_READONLY,
+                                           key: encryptionKey.data(using: .utf8)) else {
             return
         }
         queue2.inDatabase({ db2 in

@@ -19,7 +19,7 @@ class SCDatabasePoolTests: SCDBTempDBTests, FMDatabasePoolDelegate {
         super.setUp()
         // Put setup code here. This method is called before the invocation of each test method in the class.
         
-        pool = FMDatabasePool(path: databasePath)
+        pool = FMDatabasePool(path: databasePath, key: encryptionKey)
         pool.delegate = self
     }
     

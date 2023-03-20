@@ -77,6 +77,9 @@ open class FMDatabaseQueue: NSObject {
     /** Path of database */
     public var path: String
     
+    /** Encryption key of database */
+    private let key: Data?
+    
     /** Open flags */
     public var openFlags: Int32 = 0
     
@@ -85,52 +88,63 @@ open class FMDatabaseQueue: NSObject {
     /** Create queue using path.
      
      @param aPath The file path of the database.
+     @param key The encryption key of the database.
      
      @return The `FMDatabaseQueue` object. `nil` on error.
      */
     
-    public static func databaseQueue(withPath aPath: String) -> FMDatabaseQueue? {
-        return FMDatabaseQueue(withPath: aPath)
+    public static func databaseQueue(withPath aPath: String, key: String? = nil) -> FMDatabaseQueue? {
+        return FMDatabaseQueue(withPath: aPath, key: key)
     }
     
     /** Create queue using path and specified flags.
      
      @param aPath The file path of the database.
      @param openFlags Flags passed to the openWithFlags method of the database
+     @param key The encryption key of the database.
      
      @return The `FMDatabaseQueue` object. `nil` on error.
      */
-    public static func databaseQueue(withPath aPath: String, flags: Int32) -> FMDatabaseQueue? {
-        return FMDatabaseQueue(withPath: aPath, flags: flags)
+    public static func databaseQueue(withPath aPath: String, flags: Int32, key: Data? = nil) -> FMDatabaseQueue? {
+        return FMDatabaseQueue(withPath: aPath, flags: flags, key: key)
     }
     
     /** Create queue using path.
      
      @param aPath The file path of the database.
+     @param key The encryption key of the database.
      
      @return The `FMDatabaseQueue` object. `nil` on error.
      */
-    public convenience init?(withPath aPath: String) {
+    public convenience init?(withPath aPath: String, key: String? = nil) {
         // default flags for sqlite3_open
-        self.init(withPath: aPath, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE)
+        self.init(withPath: aPath, flags: SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, key: key?.data(using: .utf8))
     }
     
     /** Create queue using path and specified flags.
      
      @param aPath The file path of the database.
      @param openFlags Flags passed to the openWithFlags method of the database
+     @param key The encryption key of the database.
      
      @return The `FMDatabaseQueue` object. `nil` on error.
      */
-    public init?(withPath aPath: String, flags: Int32) {
+    public init?(withPath aPath: String, flags: Int32, key: Data? = nil) {
         db = FMDatabase.database(withPath: aPath)
         let success = db?.open(withFlags: flags) ?? false
         if  success == false {
             FMDatabaseQueue.logger.error("Could not create database queue for path \(aPath)")
             return nil
         }
+        let ok = db?.setKey(withData: key)
+        if ok == false {
+            _ = db?.close()
+            FMDatabaseQueue.logger.error("Could not set entrcyption key to database for path \(aPath)")
+            return nil
+        }
         
         self.path = aPath
+        self.key = key
         self.openFlags = flags
         
         super.init()
@@ -158,6 +172,10 @@ open class FMDatabaseQueue: NSObject {
             db = FMDatabase.database(withPath: self.path)
             if db?.open(withFlags: self.openFlags) ?? false == false {
                 logger.error("FMDatabaseQueue could not reopen database for path \(self.path)")
+                db = nil
+            }
+            if db?.setKey(withData: self.key) ?? false == false {
+                logger.error("FMDatabaseQueue could not set encryption key to database for path \(self.path)")
                 db = nil
             }
         }
