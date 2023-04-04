@@ -12,6 +12,8 @@ import Logging
 
 #if SWIFT_PACKAGE
 import SQLite
+#elseif os(Windows)
+import sqlite
 #else
 import RDSQLite3
 #endif
