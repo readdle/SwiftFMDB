@@ -22,6 +22,8 @@ let package = Package(
                 cSettings: [
                     .define("SQLITE_ENABLE_NORMALIZE", to: "1")
                 ]),
-        .testTarget(name: "SwiftFMDBTests", dependencies: ["SwiftFMDB"]),
+        .testTarget(name: "SwiftFMDBTests",
+                dependencies: ["SwiftFMDB"],
+                exclude: ["main.swift"]),
     ]
 )
