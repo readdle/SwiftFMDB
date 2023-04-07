@@ -21,8 +21,6 @@ import RDSQLite3
 private let kDispatchQueueSpecificKey = DispatchSpecificKey<FMDatabaseQueue>()
 private let logger = Logger(label: "FMDatabaseQueue")
 
-@objc(FMCoreDatabaseQueue)
-@objcMembers
 open class FMDatabaseQueue: NSObject {
     
     public var timeLoggingEnabled: Bool = false
@@ -391,16 +389,3 @@ public extension FMDatabaseQueue {
         })
     }
 }
-
-#if os(Android) || os(Windows)
-#else
-    public extension FMDatabaseQueue {
-        @objc(inTransaction:)
-        func _inTransaction(_ block: @escaping (_ db: FMDatabase, _ rollback: UnsafeMutablePointer<Bool>?) -> Void) {
-            self.inTransaction { db, rollback in
-                block(db, &rollback)
-            }
-        }
-    }
-#endif
-
