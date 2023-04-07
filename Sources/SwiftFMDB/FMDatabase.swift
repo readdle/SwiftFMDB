@@ -23,8 +23,6 @@ public let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self
 public typealias FMDBExecuteStatementsCallbackBlock = ([String: String?]) -> Int32
 public typealias FMDBSQLiteCallbackBlock = (OpaquePointer?, Int32, UnsafeMutablePointer<OpaquePointer?>?) -> Void
 
-@objc
-
 // swiftlint:disable operator_usage_whitespace
 public enum FMDatabaseError: Int, Error {
     case SQLITE_OK           = 0   /* Successful result */
@@ -90,7 +88,6 @@ private enum FMDatabaseExtendedErrorCode: Int32 {
  @warning Do not instantiate a single `FMDatabase` object and use it across multiple threads. Instead, use `<FMDatabaseQueue>`.
  
  */
-@objcMembers 
 public final class FMDatabase: NSObject {
     
     fileprivate var isExecutingStatement: Bool = false
@@ -1598,7 +1595,6 @@ private func sqliteCreateFunctionCallback(_ context: OpaquePointer?, _ aarc: Int
  - `<FMResultSet>`
  - [`sqlite3_stmt`](http://www.sqlite.org/c3ref/stmt.html)
  */
-@objc(RSMFMStatement)
 public final class FMStatement: NSObject {
 
     /** Usage count */
@@ -1714,53 +1710,6 @@ private extension FMDatabase {
         return count
     }
 }
-
-#if !os(Android) && !os(Windows)
-// MARK: - Legacy Obj interface
-
-public extension FMDatabase {
-    @objc(executeCached:query:)
-    @discardableResult
-    func legacyExecuteQuery(cached: Bool, _ sql: String) -> FMResultSet? {
-        return executeQuery(sql, withArgumentsInArray: nil, orDictionary: nil, cached: cached, cacheLimit: 1)
-    }
-
-    @objc(executeCached:update:)
-    @discardableResult
-    func legacyExecuteUpdate(cached: Bool, _ sql: String) -> Bool {
-        var err: Error?
-        return executeUpdate(sql, error: &err, withArgumentsInArray: nil, orDictionary: nil, cached: cached, cacheLimit: 1)
-    }
-
-    @objc(executeCached:query:withArgumentsInArray:)
-    @discardableResult
-    func legacyExecuteQuery(cached: Bool, _ sql: String, withArgumentsInArray arguments: [Any]) -> FMResultSet? {
-        return executeQuery(sql, withArgumentsInArray: arguments, orDictionary: nil, cached: cached, cacheLimit: 1)
-    }
-
-    @objc(executeCached:update:withArgumentsInArray:)
-    @discardableResult
-    func legacyExecuteUpdate(cached: Bool, _ sql: String, withArgumentsInArray arguments: [Any]) -> Bool {
-        var err: Error?
-        return executeUpdate(sql, error: &err, withArgumentsInArray: arguments, orDictionary: nil, cached: cached, cacheLimit: 1)
-    }
-    
-    func executeUpdate(cached: Bool, _ sql: String, withError: UnsafeMutablePointer<Error?>, withArgumentsInArray args: [Any]) -> Bool {
-        var error: Error?
-        let result = executeUpdate(sql, error: &error, withArgumentsInArray: args, orDictionary: nil, cached: cached, cacheLimit: 1)
-        withError.pointee = error
-        return result
-    }
-    
-    func legacyInSavePoint(_ block: (_ rollback: UnsafeMutablePointer<Bool>) -> Void) -> Error? {
-        return self.inSavePoint({ (_ rollback: inout Bool) -> Void in
-            var rollbackObj: Bool = false
-            block(&rollbackObj)
-            rollback = rollbackObj
-        })
-    }
-}
-#endif
 
 // MARK: - Cache
 
