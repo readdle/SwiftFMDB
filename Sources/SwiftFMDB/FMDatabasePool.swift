@@ -12,6 +12,8 @@ import Logging
 
 #if SWIFT_PACKAGE
 import SQLiteEE
+#elseif os(Windows)
+import sqlite
 #else
 import RDSQLite3
 #endif
@@ -40,8 +42,6 @@ public protocol FMDatabasePoolDelegate {
     func databasePool(_ pool: FMDatabasePool, didAdd database: FMDatabase)
 }
 
-@objc(RSMFMDatabasePool)
-@objcMembers
 public final class FMDatabasePool: NSObject {
     
     /** Database path */
