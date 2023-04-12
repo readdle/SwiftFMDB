@@ -982,6 +982,8 @@ public final class FMDatabase: NSObject {
      
      @param key The key to be used.
      
+     @param dbName The dbName parameter specifies which ATTACH-ed database should get the key. You can pass nill as an alias for "main".
+     
      @return `true` if success, `false` on error.
      
      @see http://www.sqlite-encrypt.com/develop-guide.htm
@@ -989,17 +991,19 @@ public final class FMDatabase: NSObject {
      @warning You need to have purchased the sqlite encryption extensions for this method to work.
      */
     
-    public func setKey(_ key: String) -> Bool {
+    public func setKey(_ key: String, dbName: String? = nil) -> Bool {
         guard let keyData = key.data(using: .utf8) else {
             return false
         }
-        return self.setKey(withData: keyData)
+        return self.setKey(withData: keyData, dbName: dbName)
     }
     
     /** Reset encryption key
      
      @param key The key to be used.
      
+     @param dbName The dbName parameter specifies which ATTACH-ed database should get the key. You can pass nill as an alias for "main".
+     
      @return `true` if success, `false` on error.
      
      @see http://www.sqlite-encrypt.com/develop-guide.htm
@@ -1007,17 +1011,19 @@ public final class FMDatabase: NSObject {
      @warning You need to have purchased the sqlite encryption extensions for this method to work.
      */
     
-    public func rekey(_ key: String) -> Bool {
+    public func rekey(_ key: String, dbName: String? = nil) -> Bool {
         guard let keyData = key.data(using: .utf8) else {
             return false
         }
-        return self.rekey(withData: keyData)
+        return self.rekey(withData: keyData, dbName: dbName)
     }
     
     /** Set encryption key using `keyData`.
      
      @param keyData The `NSData` to be used.
      
+     @param dbName The dbName parameter specifies which ATTACH-ed database should get the key. You can pass nill as an alias for "main".
+     
      @return `true` if success, `false` on error.
      
      @see http://www.sqlite-encrypt.com/develop-guide.htm
@@ -1025,22 +1031,26 @@ public final class FMDatabase: NSObject {
      @warning You need to have purchased the sqlite encryption extensions for this method to work.
      */
     
-    public func setKey(withData keyData: Data?) -> Bool {
-        #if SQLITE_HAS_CODEC
-            guard let keyData = keyData else {
-                return false
-            }
-            var rc = sqlite3_key(db, keyData.bytes, Int32(keyData.count))
-            return (rc == SQLITE_OK)
-        #else
-            return false
-        #endif
+    public func setKey(withData keyData: Data?, dbName: String? = nil) -> Bool {
+        guard let keyData = keyData else {
+            return setKey(dbName, nil, 0)
+        }
+        return keyData.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) in
+            setKey(dbName, ptr.baseAddress, Int32(ptr.count))
+        }
+    }
+    
+    private func setKey(_ dbName: String?, _ pKey: UnsafeRawPointer?, _ nKey: Int32) -> Bool {
+        let rc = sqlite3_key_v2(db, dbName, pKey, nKey)
+        return (rc == SQLITE_OK)
     }
     
     /** Reset encryption key using `keyData`.
      
      @param keyData The `NSData` to be used.
      
+     @param dbName The dbName parameter specifies which ATTACH-ed database should get the key. You can pass nill as an alias for "main".
+     
      @return `true` if success, `false` on error.
      
      @see http://www.sqlite-encrypt.com/develop-guide.htm
@@ -1048,19 +1058,21 @@ public final class FMDatabase: NSObject {
      @warning You need to have purchased the sqlite encryption extensions for this method to work.
      */
     
-    public func rekey(withData keyData: Data?) -> Bool {
-        #if SQLITE_HAS_CODEC
-            guard let keyData = keyData else {
-                return false
-            }
-            var rc = sqlite3_rekey(db, keyData.bytes, Int32(keyData.count))
-            if rc != SQLITE_OK {
-                logger.error("error on rekey: \(rc), error message = \(self.lastErrorMessage())")
-            }
-            return (rc == SQLITE_OK)
-        #else
-            return false
-        #endif
+    public func rekey(withData keyData: Data?, dbName: String? = nil) -> Bool {
+        guard let keyData = keyData else {
+            return rekey(dbName, nil, 0)
+        }
+        return keyData.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) in
+            rekey(dbName, ptr.baseAddress, Int32(ptr.count))
+        }
+    }
+    
+    private func rekey(_ dbName: String?, _ pKey: UnsafeRawPointer?, _ nKey: Int32) -> Bool {
+        let rc = sqlite3_rekey_v2(db, dbName, pKey, nKey)
+        if rc != SQLITE_OK {
+            logger.error("error on rekey: \(rc), error message = \(self.lastErrorMessage() ?? "undefined")")
+        }
+        return (rc == SQLITE_OK)
     }
     
     // MARK: Retrieving error codes

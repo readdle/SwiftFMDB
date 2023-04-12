@@ -20,7 +20,8 @@ let package = Package(
                     .product(name: "Logging", package: "swift-log")
                 ],
                 cSettings: [
-                    .define("SQLITE_ENABLE_NORMALIZE", to: "1")
+                    .define("SQLITE_HAS_CODEC", to: "1"),
+                    .define("SQLITE_ENABLE_NORMALIZE", to: "1"),
                 ]),
         .testTarget(name: "SwiftFMDBTests",
                 dependencies: ["SwiftFMDB"],
