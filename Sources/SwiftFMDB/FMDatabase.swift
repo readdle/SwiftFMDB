@@ -830,11 +830,11 @@ public final class FMDatabase: NSObject {
      */
     
     public func executeQuery(cached: Bool, _ sql: String, _ args: Any? ...) -> FMResultSet? {
-        return executeQuery(cachePolicy: .defaultPolicy(isCacheEnabled: cached), sql, args)
+        return executeQuery(cachePolicy: .defaultPolicy(isCacheEnabled: cached), sql, withArgumentsInArray: args)
     }
     
     public func executeQuery(cached: Bool, _ sql: String, arg1: String) -> FMResultSet? {
-        return executeQuery(cachePolicy: .defaultPolicy(isCacheEnabled: cached), sql, arg1)
+        return executeQuery(cachePolicy: .defaultPolicy(isCacheEnabled: cached), sql, withArgumentsInArray: [arg1])
     }
     
     public func executeQuery(cached: Bool, _ sql: String, withArgumentsInArray arguments: [Any?]) -> FMResultSet? {
