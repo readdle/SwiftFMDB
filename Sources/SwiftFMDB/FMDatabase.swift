@@ -830,15 +830,27 @@ public final class FMDatabase: NSObject {
      */
     
     public func executeQuery(cached: Bool, _ sql: String, _ args: Any? ...) -> FMResultSet? {
-        return executeQuery(sql, withArgumentsInArray: args, orDictionary: nil, cached: cached, cacheLimit: 1)
+        return executeQuery(cachePolicy: .defaultPolicy(isCacheEnabled: cached), sql, withArgumentsInArray: args)
     }
     
     public func executeQuery(cached: Bool, _ sql: String, arg1: String) -> FMResultSet? {
-        return executeQuery(sql, withArgumentsInArray: [arg1], orDictionary: nil, cached: cached, cacheLimit: 1)
+        return executeQuery(cachePolicy: .defaultPolicy(isCacheEnabled: cached), sql, withArgumentsInArray: [arg1])
     }
     
     public func executeQuery(cached: Bool, _ sql: String, withArgumentsInArray arguments: [Any?]) -> FMResultSet? {
-        return executeQuery(sql, withArgumentsInArray: arguments, orDictionary: nil, cached: cached, cacheLimit: 1)
+        return executeQuery(cachePolicy: .defaultPolicy(isCacheEnabled: cached), sql, withArgumentsInArray: arguments)
+    }
+    
+    public func executeQuery(cachePolicy: StatementCachePolicy, _ sql: String, _ args: Any? ...) -> FMResultSet? {
+        return executeQuery(sql, withArgumentsInArray: args, orDictionary: nil, cached: cachePolicy.isCacheEnabled, cacheLimit: cachePolicy.cacheLimit)
+    }
+    
+    public func executeQuery(cachePolicy: StatementCachePolicy, _ sql: String, arg1: String) -> FMResultSet? {
+        return executeQuery(sql, withArgumentsInArray: [arg1], orDictionary: nil, cached: cachePolicy.isCacheEnabled, cacheLimit: cachePolicy.cacheLimit)
+    }
+    
+    public func executeQuery(cachePolicy: StatementCachePolicy, _ sql: String, withArgumentsInArray arguments: [Any?]) -> FMResultSet? {
+        return executeQuery(sql, withArgumentsInArray: arguments, orDictionary: nil, cached: cachePolicy.isCacheEnabled, cacheLimit: cachePolicy.cacheLimit)
     }
     
     /** Execute select statement
@@ -859,6 +871,10 @@ public final class FMDatabase: NSObject {
     
     public func executeQuery(cached: Bool = false, _ sql: String, withParameterDictionary arguments: [AnyHashable: Any]) -> FMResultSet? {
         return executeQuery(sql, withArgumentsInArray: nil, orDictionary: arguments, cached: cached, cacheLimit: 1)
+    }
+    
+    public func executeQuery(cachePolicy: StatementCachePolicy, _ sql: String, withParameterDictionary arguments: [AnyHashable: Any]) -> FMResultSet? {
+        return executeQuery(sql, withArgumentsInArray: nil, orDictionary: arguments, cached: cachePolicy.isCacheEnabled, cacheLimit: cachePolicy.cacheLimit)
     }
     
     // MARK: Transactions
@@ -1776,4 +1792,39 @@ public extension FMDatabase {
                             cached: parameters.cached,
                             cacheLimit: parameters.cacheLimit)
     }
+}
+
+public extension FMDatabase {
+    
+    enum StatementCachePolicy {
+        case doNotCache
+        case cache(limit: Int)
+        
+        public var isCacheEnabled: Bool {
+            switch self {
+            case .doNotCache:
+                return false
+            case .cache(_):
+                return true
+            }
+        }
+        
+        var cacheLimit: Int {
+            switch self {
+            case .doNotCache:
+                return 1
+            case .cache(let limit):
+                return limit
+            }
+        }
+        
+        static func defaultPolicy(isCacheEnabled: Bool) -> StatementCachePolicy {
+            if isCacheEnabled {
+                return .cache(limit: 1)
+            }
+            
+            return .doNotCache
+        }
+    }
+    
 }
