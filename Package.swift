@@ -11,7 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", .upToNextMinor(from: "1.4.4")),
-        .package(name: "SQLite", url: "https://github.com/readdle/swift-sqlite", .exact( "3.39.4-unicode.1"))
+        .package(name: "SQLite", url: "https://github.com/readdle/swift-sqlite", .branch( "no-unicode"))
     ],
     targets: [
         .target(name: "SwiftFMDB",

@@ -14,18 +14,9 @@
         "package": "SQLite",
         "repositoryURL": "https://github.com/readdle/swift-sqlite",
         "state": {
-          "branch": null,
-          "revision": "3793d5a70e18ba6ddbd3e28f154549d4e4c7befb",
-          "version": "3.39.4-unicode.1"
-        }
-      },
-      {
-        "package": "unicode",
-        "repositoryURL": "https://github.com/readdle/swift-unicode",
-        "state": {
-          "branch": null,
-          "revision": "fb8aac372834ccb8fab0a5c1742df862d47c4156",
-          "version": "68.2.0"
+          "branch": "no-unicode",
+          "revision": "8b6a71736c6c8da0bf0299de239eb07eae60b8d3",
+          "version": null
         }
       }
     ]
