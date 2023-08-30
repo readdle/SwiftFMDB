@@ -11,7 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", .upToNextMinor(from: "1.4.4")),
-        .package(name: "SQLiteEE", url: "git@github.com:readdle/swift-sqlite-ee.git", .upToNextMinor(from: "3.39.4"))
+        .package(name: "SQLiteEE", url: "git@github.com:readdle/swift-sqlite-ee.git", .branch("feature/android-swift-5.7"))
     ],
     targets: [
         .target(name: "SwiftFMDB",
