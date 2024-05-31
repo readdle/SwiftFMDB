@@ -276,6 +276,55 @@ public class SCDatabaseTest: SCDBTempDBTests {
         XCTAssertFalse(db.hadError(), "Shouldn't have any errors")
     }
     
+    func testEdgecases() {
+        // Setup edgecases table
+        XCTAssertTrue(db.executeUpdate(cached: false, "create table edgecases (t text, i integer, ui integer, d double)"))
+        _ = db.beginTransaction()
+        XCTAssertTrue(
+            db.executeUpdate(cached: false, "insert into edgecases (t, i, ui, d) values (?, ?, ?, ?)",
+                             "edgecase1",
+                             Int64.min,
+                             UInt64.min,
+                             3.1415926535)
+        )
+        XCTAssertTrue(
+            db.executeUpdate(cached: false, "insert into edgecases (t, i, ui, d) values (?, ?, ?, ?)",
+                             "edgecase2",
+                             Int64.max,
+                             UInt64.max,
+                             2.7182818284)
+        )
+        XCTAssertTrue(db.commit())
+        
+        // Check edgecases
+        if let rs = db.executeQuery(cached: false, "select * from edgecases") {
+            var anyEdgecase = false
+            while rs.next() {
+                anyEdgecase = true
+                
+                let result: [AnyHashable: Any]? = rs.resultDictionary()
+                if result?["t"] as? String == "edgecase1" {
+                    XCTAssertEqual((result?["i"] as? NSNumber)?.int64Value, Int64.min)
+                    XCTAssertEqual((result?["ui"] as? NSNumber)?.uint64Value, UInt64.min)
+                    XCTAssertEqual((result?["d"] as? NSNumber)?.doubleValue, 3.1415926535)
+                }
+                else if result?["t"] as? String == "edgecase2" {
+                    XCTAssertEqual((result?["i"] as? NSNumber)?.int64Value, Int64.max)
+                    XCTAssertEqual((result?["ui"] as? NSNumber)?.uint64Value, UInt64.max)
+                    XCTAssertEqual((result?["d"] as? NSNumber)?.doubleValue, 2.7182818284)
+                }
+                else {
+                    XCTFail("Unexpected case")
+                }
+            }
+            XCTAssertTrue(anyEdgecase)
+            rs.close()
+        }
+        else {
+            XCTFail("Should have a non-nil result")
+        }
+    }
+    
     func testNullValues() {
         XCTAssertTrue(db.executeUpdate(cached: false, "create table t2 (a integer, b integer)"))
         let result = db.executeUpdate(cached: false, "insert into t2 values (?, ?)", nil, Int(5))
