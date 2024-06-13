@@ -473,7 +473,7 @@ public final class FMResultSet: NSObject {
         let columnType = sqlite3_column_type(statement.statement, columnIdx)
         var returnValue: Any? 
         if columnType == SQLITE_INTEGER {
-            returnValue = self.int64(forColumnIndex: columnIdx)
+            returnValue = Int(self.int64(forColumnIndex: columnIdx))
         }
         else if columnType == SQLITE_FLOAT {
             returnValue = self.double(forColumnIndex: columnIdx)
