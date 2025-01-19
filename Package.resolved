@@ -6,26 +6,17 @@
         "repositoryURL": "https://github.com/apple/swift-log.git",
         "state": {
           "branch": null,
-          "revision": "6fe203dc33195667ce1759bf0182975e4653ba1c",
-          "version": "1.4.4"
+          "revision": "96a2f8a0fa41e9e09af4585e2724c4e825410b91",
+          "version": "1.6.2"
         }
       },
       {
         "package": "SQLiteEE",
         "repositoryURL": "git@github.com:readdle/swift-sqlite-ee.git",
         "state": {
-          "branch": "3.39.4-readdle.2",
-          "revision": "ab1ac4b8ac612a3d2aa4db35fc3829f43cd1a930",
+          "branch": "swift6-android",
+          "revision": "d028a4d6aac325f10541fdac718568388a39c33f",
           "version": null
-        }
-      },
-      {
-        "package": "unicode",
-        "repositoryURL": "https://github.com/readdle/swift-unicode",
-        "state": {
-          "branch": null,
-          "revision": "fb8aac372834ccb8fab0a5c1742df862d47c4156",
-          "version": "68.2.0"
         }
       }
     ]
