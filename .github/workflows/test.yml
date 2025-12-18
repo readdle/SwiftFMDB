@@ -1,0 +1,158 @@
+name: Test
+
+on: 
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: zsh -l {0} # Use zsh login shell to make homebrew available
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: "macOS"
+    runs-on: [macOS, apple, spark]
+    timeout-minutes: 60
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build tests
+      run: swift build --build-tests
+    - name: Run tests
+      run: |
+        set -eo pipefail
+        swift test --skip-build \
+          | tee test.log \
+          | xcbeautify --disable-logging
+
+    - name: Upload logs
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: logs-macos
+        path: '*.log'
+        if-no-files-found: warn
+        retention-days: 3
+
+  ios:
+    name: "iOS"
+    runs-on: [macOS, apple, spark]
+    timeout-minutes: 60
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Detect build destination
+      run: |
+        set -eo pipefail
+        XCDESTINATION_DEVICE="$(xcodebuild -scheme SwiftFMDB -showdestinations | grep -o 'iPhone [0-9]\+ }' | tail -n 1 | sed 's/ }$//')"
+        echo "XCDESTINATION_DEVICE=$XCDESTINATION_DEVICE" >> $GITHUB_ENV
+
+    - name: Build tests
+      run: |
+        set -eo pipefail
+        xcodebuild build-for-testing \
+          -scheme SwiftFMDB \
+          -destination "platform=iOS Simulator,name=$XCDESTINATION_DEVICE" \
+          | tee build.log \
+          | xcbeautify --disable-logging
+
+    - name: Run tests
+      run: |
+        set -eo pipefail
+        xcodebuild test-without-building \
+          -scheme SwiftFMDB \
+          -destination "platform=iOS Simulator,name=$XCDESTINATION_DEVICE" \
+          | tee test.log \
+          | xcbeautify --disable-logging
+
+    - name: Upload logs
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: logs-ios
+        path: '*.log'
+        if-no-files-found: warn
+        retention-days: 3
+
+  android:
+    name: "Android"
+    runs-on: [self-hosted, macOS, ARM64, AndroidSwift6]
+    timeout-minutes: 60
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run android tests
+      run: |
+        set -ex
+
+        # Environment
+        export LANG=en_US.UTF-8
+        export LC_ALL=en_US.UTF-8
+
+        export SWIFT_ANDROID_HOME=$SWIFT_ANDROID_HOME_6_1
+        export SWIFT_ANDROID_API_LEVEL=29
+        export SWIFT_ANDROID_ARCH=aarch64
+        export ANDROID_NDK=$ANDROID_NDK_ROOT_27C
+        export ANDROID_NDK_ROOT=$ANDROID_NDK
+        export ANDROID_NDK_HOME=$ANDROID_NDK
+
+        export PATH=$ANDROID_NDK:$PATH
+        export PATH=$SWIFT_ANDROID_HOME/build-tools:$PATH
+
+        export EMULATOR_PORT=5558
+        export EMULATOR_SDK_VERSION=29
+        export EMULATOR_ARCH=arm64-v8a
+        export EMULATOR_NAME=ci-test-$EMULATOR_SDK_VERSION-$EMULATOR_PORT
+        export ANDROID_SERIAL=emulator-$EMULATOR_PORT
+        export EMULATOR_PACKAGE="system-images;android-$EMULATOR_SDK_VERSION;google_apis;$EMULATOR_ARCH"
+        export EMULATOR_ABI=google_apis/$EMULATOR_ARCH
+
+        function finish {
+          exit_code=$?
+          adb -s $ANDROID_SERIAL emu kill
+          exit $exit_code
+        }
+        trap finish EXIT
+
+        # Delete emulator if needed
+        if $ANDROID_HOME/emulator/emulator -list-avds | grep -q $EMULATOR_NAME
+        then
+            avdmanager delete avd --name $EMULATOR_NAME
+        fi
+
+        # Just in case
+        rm -rf ~/.android/avd/$EMULATOR_NAME.avd
+
+        avdmanager create avd -n $EMULATOR_NAME -k "$EMULATOR_PACKAGE" -d "pixel" --abi $EMULATOR_ABI
+
+        adb start-server
+        $ANDROID_HOME/emulator/emulator -no-window -avd $EMULATOR_NAME -noaudio -port $EMULATOR_PORT -memory 8000 -partition-size 8000 -timezone Europe/Kiev > /dev/null &
+        timeout 120 adb -s emulator-$EMULATOR_PORT wait-for-any-device;
+
+        # Clear logcat from previous sessions
+        timeout 30 zsh -c "adb logcat -c || true"
+
+        mkdir -p .build/reports
+        adb logcat | ndk-stack -sym .build/debug > .build/reports/ndk-stack.log &
+
+        swift-android test --deploy -Xbuild -Xswiftc -Xbuild -DUNIT_TESTS
+        swift-android test --just-run | tee .build/reports/test.log
+        return_code=${pipestatus[1]}
+
+        cat .build/reports/test.log | xcpretty --report junit --output .build/reports/junit.xml
+        cat .build/reports/ndk-stack.log
+
+        exit ${return_code}
+
+    - name: Upload logs
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: logs-android
+        path: '.build/reports/*'
+        if-no-files-found: warn
+        retention-days: 3
