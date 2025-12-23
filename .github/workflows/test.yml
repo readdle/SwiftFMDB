@@ -1,4 +1,4 @@
-name: Test
+name: Swift Package
 
 on: 
   pull_request:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   macos:
     name: "macOS"
-    runs-on: [macOS, apple, spark]
+    runs-on: macOS-latest
     timeout-minutes: 60
 
     steps:
@@ -40,7 +40,7 @@ jobs:
 
   ios:
     name: "iOS"
-    runs-on: [macOS, apple, spark]
+    runs-on: macOS-latest
     timeout-minutes: 60
 
     steps:
