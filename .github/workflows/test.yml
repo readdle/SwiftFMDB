@@ -15,11 +15,19 @@ concurrency:
 jobs:
   macos:
     name: "macOS"
-    runs-on: [macOS, apple, spark]
+    runs-on: macOS-latest
     timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: true
+    - name: Use HTTPS for GitHub dependencies (instead of SSH)
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git config --global url."https://github.com/".insteadOf "git@github.com:"
+        git config --global http.https://github.com/.extraheader "AUTHORIZATION: basic $(printf "x-access-token:%s" "$GH_TOKEN" | base64)"
     - name: Build tests
       run: swift build --build-tests
     - name: Run tests
@@ -40,11 +48,19 @@ jobs:
 
   ios:
     name: "iOS"
-    runs-on: [macOS, apple, spark]
+    runs-on: macOS-latest
     timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        persist-credentials: true
+    - name: Use HTTPS for GitHub dependencies (instead of SSH)
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git config --global url."https://github.com/".insteadOf "git@github.com:"
+        git config --global http.https://github.com/.extraheader "AUTHORIZATION: basic $(printf "x-access-token:%s" "$GH_TOKEN" | base64)"
     - name: Detect build destination
       run: |
         set -eo pipefail
