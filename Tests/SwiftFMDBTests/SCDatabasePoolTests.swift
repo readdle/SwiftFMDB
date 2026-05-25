@@ -76,6 +76,32 @@ class SCDatabasePoolTests: SCDBTempDBTests, FMDatabasePoolDelegate {
         pool.releaseAllDatabases()
         XCTAssertEqual(pool.countOfOpenDatabases(), 0, "We should be back to zero databases again")
     }
+
+    func testUnicodeFunctionsAreRegisteredOnEachPoolConnection() {
+        pool.inDatabase({ db1 in
+            guard let db1 = db1 else {
+                XCTFail("db1 == nil")
+                return
+            }
+
+            XCTAssertEqual(self.stringValue(in: db1, for: "SELECT UPPER('çoğunlukla')"), "ÇOĞUNLUKLA")
+            XCTAssertEqual(db1.bool(forQuery: "SELECT 'ÇOĞUNLUKLA' LIKE 'çoğun%'", cached: false), true)
+
+            self.pool.inDatabase({ db2 in
+                guard let db2 = db2 else {
+                    XCTFail("db2 == nil")
+                    return
+                }
+
+                XCTAssertTrue(db2 !== db1, "Nested checkout should create a second database connection")
+                XCTAssertEqual(self.stringValue(in: db2, for: "SELECT LOWER('I', 'tr_TR')"), "ı")
+                XCTAssertNil(self.stringValue(in: db2, for: "SELECT UPPER(NULL)"))
+                XCTAssertEqual(db2.bool(forQuery: "SELECT like('foo!!bar', 'foo!bar', '!')", cached: false), true)
+            })
+
+            XCTAssertEqual(self.pool.countOfOpenDatabases(), 2)
+        })
+    }
     
     func testCheckedInCheckoutOutCount() {
         pool.inDatabase({ aDb in
@@ -341,6 +367,7 @@ class SCDatabasePoolTests: SCDBTempDBTests, FMDatabasePoolDelegate {
         ("testMaximumDatabaseLimit", testMaximumDatabaseLimit),
         ("testCheckedInCheckoutOutCount", testCheckedInCheckoutOutCount),
         ("testDatabaseCreation", testDatabaseCreation),
+        ("testUnicodeFunctionsAreRegisteredOnEachPoolConnection", testUnicodeFunctionsAreRegisteredOnEachPoolConnection),
         ("testPoolIsInitiallyEmpty", testPoolIsInitiallyEmpty),
         ("testTransactionRollback", testTransactionRollback),
         ("testSavepoint", testSavepoint),

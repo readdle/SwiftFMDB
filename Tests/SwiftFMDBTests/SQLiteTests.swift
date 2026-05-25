@@ -20,7 +20,17 @@ import XCTest
 class SQLiteTests: SCDBTempDBTests {
     
     func testEnabledFlags() {
-        let shouldBeEnabledOptions = ["ENABLE_ATOMIC_WRITE", "ENABLE_UNLOCK_NOTIFY", "ENABLE_API_ARMOR", "ENABLE_COLUMN_METADATA", "ENABLE_FTS5", "ENABLE_ICU", "ENABLE_RTREE"]
+        var shouldBeEnabledOptions = [
+            "ENABLE_ATOMIC_WRITE",
+            "ENABLE_UNLOCK_NOTIFY",
+            "ENABLE_API_ARMOR",
+            "ENABLE_COLUMN_METADATA",
+            "ENABLE_FTS5",
+            "ENABLE_RTREE",
+        ]
+#if !FMUNICODE_ENABLE
+        shouldBeEnabledOptions.append("ENABLE_ICU")
+#endif
         
         for option in shouldBeEnabledOptions {
             XCTAssertEqual(sqlite3_compileoption_used(option), 1, "SQLite should be compiled with \(option)")
@@ -73,8 +83,8 @@ class SQLiteTests: SCDBTempDBTests {
         XCTAssertEqual(prepareResult, SQLITE_MISUSE)
     }
     
-    func testEnabledICU() {
-        // ICU allows using case insensitive search in a non-english language
+    func testUnicodeFunctions() {
+        // ICU and FMUnicode allow case-insensitive search in non-English text.
         
         XCTAssertTrue(db.executeUpdate(cached: false, "CREATE TABLE contacts (first_name TEXT);"))
         
@@ -88,15 +98,128 @@ class SQLiteTests: SCDBTempDBTests {
             rsCount += 1
         }
         XCTAssertEqual(rsCount, 2, "It should select 2 rows. Actual count: \(rsCount)")
+        rs?.close()
+
+        XCTAssertEqual(stringValue(for: "SELECT UPPER('çoğunlukla')"), "ÇOĞUNLUKLA")
+        XCTAssertEqual(stringValue(for: "SELECT LOWER('ÇOĞUNLUKLA')"), "çoğunlukla")
+        XCTAssertNil(stringValue(for: "SELECT UPPER(NULL)"))
+        XCTAssertEqual(stringValue(for: "SELECT UPPER('abc123')"), "ABC123")
+        XCTAssertEqual(stringValue(for: "SELECT UPPER('i', 'tr_TR')"), "İ")
+        XCTAssertEqual(stringValue(for: "SELECT LOWER('I', 'tr_TR')"), "ı")
+        XCTAssertEqual(stringValue(for: "SELECT UPPER('i', 'en_US')"), "I")
+        XCTAssertEqual(stringValue(for: "SELECT UPPER('i', NULL)"), "I")
+        XCTAssertEqual(stringValue(for: "SELECT LOWER('I', '')"), "i")
+        XCTAssertEqual(stringValue(for: "SELECT UPPER('i', 123)"), "I")
+        XCTAssertEqual(stringValue(for: "SELECT UPPER(123, 'tr_TR')"), "123")
+        XCTAssertEqual(stringValue(for: "SELECT hex(UPPER(char(97, 0, 98)))"), "410042")
+
+        assertUnicodeCaseFunctionSurface(in: db)
+    }
+
+    func testUnicodeFunctionsInUTF16Database() {
+        let utf16DB = makeUTF16Database()
+        defer {
+            XCTAssertTrue(utf16DB.close())
+        }
+
+        XCTAssertTrue(stringValue(in: utf16DB, for: "PRAGMA encoding")?.hasPrefix("UTF-16") ?? false)
+        XCTAssertEqual(stringValue(in: utf16DB, for: "SELECT UPPER('çoğunlukla')"), "ÇOĞUNLUKLA")
+        XCTAssertEqual(stringValue(in: utf16DB, for: "SELECT LOWER('ÇOĞUNLUKLA')"), "çoğunlukla")
+        XCTAssertNil(stringValue(in: utf16DB, for: "SELECT UPPER(NULL)"))
+        XCTAssertEqual(stringValue(in: utf16DB, for: "SELECT UPPER('i', 'tr_TR')"), "İ")
+        XCTAssertEqual(stringValue(in: utf16DB, for: "SELECT LOWER('I', 'tr_TR')"), "ı")
+        XCTAssertEqual(stringValue(in: utf16DB, for: "SELECT UPPER('i', NULL)"), "I")
+
+        assertUnicodeCaseFunctionSurface(in: utf16DB)
+        assertUnicodeLikeFunctionSurface(in: utf16DB)
+    }
+
+    func testUnicodeCaseFunctionsInExpressionIndex() {
+        #if FMUNICODE_ENABLE
+        XCTAssertTrue(db.executeUpdate(cached: false, "CREATE TABLE indexed_contacts (first_name TEXT);"))
+        XCTAssertTrue(db.executeUpdate(cached: false, "INSERT INTO indexed_contacts (first_name) VALUES ('çoğunlukla'), ('ÇOĞUNLUKLA'), ('different');"))
+        XCTAssertTrue(db.executeUpdate(cached: false, "CREATE INDEX idx_indexed_contacts_upper_name ON indexed_contacts(UPPER(first_name));"))
+
+        let plan = db.executeQuery(cached: false, "EXPLAIN QUERY PLAN SELECT * FROM indexed_contacts WHERE UPPER(first_name) = UPPER(?)", "çoğunlukla")
+        XCTAssertNotNil(plan)
+        defer { plan?.close() }
+
+        var planDetails = [String]()
+        while plan?.next() == true {
+            planDetails.append(plan?.string(forColumnIndex: 3) ?? "")
+        }
+        XCTAssertTrue(planDetails.contains(where: { $0.contains("idx_indexed_contacts_upper_name") }), planDetails.joined(separator: "\n"))
+        XCTAssertEqual(db.int(forQuery: "SELECT count(*) FROM indexed_contacts WHERE UPPER(first_name) = UPPER(?)", cached: false, "çoğunlukla"), 2)
+        #endif
+    }
+
+    func testUnicodeLikeFunction() {
+        XCTAssertEqual(db.bool(forQuery: "SELECT 'ÇOĞUNLUKLA' LIKE 'çoğun%'", cached: false), true)
+        XCTAssertEqual(db.bool(forQuery: "SELECT 'ÇOĞUNLUKLA' LIKE 'çoğun_____'", cached: false), true)
+        XCTAssertEqual(db.bool(forQuery: "SELECT '100% ÇOĞUNLUKLA' LIKE '100!% çoğun%' ESCAPE '!'", cached: false), true)
+        XCTAssertEqual(db.bool(forQuery: "SELECT '100X ÇOĞUNLUKLA' LIKE '100!% çoğun%' ESCAPE '!'", cached: false), false)
+
+        XCTAssertEqual(db.bool(forQuery: "SELECT like('çoğun%', 'ÇOĞUNLUKLA')", cached: false), true)
+        XCTAssertEqual(db.bool(forQuery: "SELECT like('ÇOĞUNLUKLA', 'çoğun%')", cached: false), false)
+
+        assertUnicodeLikeFunctionSurface(in: db)
+    }
+
+    private func assertUnicodeCaseFunctionSurface(in database: FMDatabase, file: StaticString = #file, line: UInt = #line) {
+        XCTAssertEqual(stringValue(in: database, for: "SELECT UPPER('ß')", file: file, line: line), "SS", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT LOWER('İ')", file: file, line: line), "i\u{0307}", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT LOWER('İ', 'tr_TR')", file: file, line: line), "i", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT UPPER('ς')", file: file, line: line), "Σ", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT LOWER('Σ')", file: file, line: line), "σ", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT UPPER('i', 'az')", file: file, line: line), "İ", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT LOWER('I', 'az')", file: file, line: line), "ı", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT LOWER('Ì', 'lt')", file: file, line: line), "i\u{0307}\u{0300}", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT UPPER('ß', 'x_unknown_locale')", file: file, line: line), "SS", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT LOWER(UPPER('straße')) = 'straße'", file: file, line: line), "0", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT UPPER(UPPER('Straße')) = UPPER('Straße')", file: file, line: line), "1", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT UPPER('')", file: file, line: line), "", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT LOWER('A')", file: file, line: line), "a", file: file, line: line)
+        XCTAssertEqual(stringValue(in: database, for: "SELECT UPPER(char(128512))", file: file, line: line), "😀", file: file, line: line)
+
+        let longValue = String(repeating: "ß", count: 200_000)
+        XCTAssertEqual(database.int(forQuery: "SELECT length(UPPER(?))", cached: false, longValue), 400_000, file: file, line: line)
+        XCTAssertEqual(database.string(forQuery: "SELECT substr(UPPER(?), 1, 4)", cached: false, longValue), "SSSS", file: file, line: line)
+        XCTAssertEqual(database.string(forQuery: "SELECT substr(UPPER(?), -4)", cached: false, longValue), "SSSS", file: file, line: line)
+    }
+
+    private func assertUnicodeLikeFunctionSurface(in database: FMDatabase, file: StaticString = #file, line: UInt = #line) {
+        XCTAssertEqual(database.bool(forQuery: "SELECT '' LIKE ''", cached: false), true, file: file, line: line)
+        XCTAssertEqual(database.bool(forQuery: "SELECT '' LIKE '%'", cached: false), true, file: file, line: line)
+        XCTAssertEqual(database.bool(forQuery: "SELECT 'alpha' LIKE '%a'", cached: false), true, file: file, line: line)
+        XCTAssertEqual(database.bool(forQuery: "SELECT 'alpha' LIKE 'a%'", cached: false), true, file: file, line: line)
+        XCTAssertEqual(database.bool(forQuery: "SELECT 'alpha' LIKE 'a'", cached: false), false, file: file, line: line)
+        XCTAssertEqual(database.bool(forQuery: "SELECT 'Σ' LIKE 'ς'", cached: false), true, file: file, line: line)
+        XCTAssertEqual(database.bool(forQuery: "SELECT '100% ÇOĞUNLUKLA' LIKE '100é% çoğun%' ESCAPE 'é'", cached: false), true, file: file, line: line)
+        XCTAssertEqual(database.bool(forQuery: "SELECT 'foo!bar' LIKE 'foo!!bar' ESCAPE '!'", cached: false), true, file: file, line: line)
+        XCTAssertEqual(database.bool(forQuery: "SELECT like('100é% çoğun%', '100% ÇOĞUNLUKLA', 'é')", cached: false), true, file: file, line: line)
+        XCTAssertEqual(database.bool(forQuery: "SELECT like('foo!!bar', 'foo!bar', '!')", cached: false), true, file: file, line: line)
+        XCTAssertEqual(database.bool(forQuery: "SELECT like(char(97, 0, 98), char(97, 0, 99))", cached: false), true, file: file, line: line)
+    }
+
+    private func makeUTF16Database(file: StaticString = #file, line: UInt = #line) -> FMDatabase {
+        let utf16DB = FMDatabase(path: "")
+        XCTAssertTrue(utf16DB.open(), file: file, line: line)
+        XCTAssertTrue(utf16DB.executeUpdate(cached: false, "PRAGMA encoding = 'UTF-16';"), file: file, line: line)
+        XCTAssertTrue(utf16DB.executeUpdate(cached: false, "CREATE TABLE utf16_encoding_probe (value TEXT);"), file: file, line: line)
+        return utf16DB
     }
 
     public static var allTests = [
+        ("testEnabledFlags", testEnabledFlags),
         ("testEnabledUSleep", testEnabledUSleep),
         ("testEnabledFTS5", testEnabledFTS5),
         ("testEnabledRTree", testEnabledRTree),
         ("testEnabledColumnMetadata", testEnabledColumnMetadata),
         ("testEnabledAPIArmor", testEnabledAPIArmor),
-        ("testEnabledICU", testEnabledICU)
+        ("testUnicodeFunctions", testUnicodeFunctions),
+        ("testUnicodeFunctionsInUTF16Database", testUnicodeFunctionsInUTF16Database),
+        ("testUnicodeCaseFunctionsInExpressionIndex", testUnicodeCaseFunctionsInExpressionIndex),
+        ("testUnicodeLikeFunction", testUnicodeLikeFunction)
     ]
     
 }

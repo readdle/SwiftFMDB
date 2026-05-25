@@ -68,6 +68,23 @@ class SCDatabaseQueueTests: SCDBTempDBTests {
             XCTAssertEqual(count, 2)
         })
     }
+
+    func testUnicodeFunctionsAreRegisteredOnQueueConnection() {
+        queue.inDatabase({ db in
+            XCTAssertEqual(self.stringValue(in: db, for: "SELECT UPPER('çoğunlukla')"), "ÇOĞUNLUKLA")
+            XCTAssertEqual(self.stringValue(in: db, for: "SELECT LOWER('I', 'tr_TR')"), "ı")
+            XCTAssertEqual(db.bool(forQuery: "SELECT 'ÇOĞUNLUKLA' LIKE 'çoğun%'", cached: false), true)
+            XCTAssertEqual(db.bool(forQuery: "SELECT like('100é% çoğun%', '100% ÇOĞUNLUKLA', 'é')", cached: false), true)
+        })
+
+        queue.close()
+
+        queue.inDatabase({ db in
+            XCTAssertEqual(self.stringValue(in: db, for: "SELECT UPPER('i', 'tr_TR')"), "İ")
+            XCTAssertNil(self.stringValue(in: db, for: "SELECT UPPER(NULL)"))
+            XCTAssertEqual(db.bool(forQuery: "SELECT like('foo!!bar', 'foo!bar', '!')", cached: false), true)
+        })
+    }
     
     func testReadOnlyQueue() {
         guard let queue2 = FMDatabaseQueue(withPath: databasePath,
@@ -170,6 +187,7 @@ class SCDatabaseQueueTests: SCDBTempDBTests {
 
     public static var allTests = [
         ("testQueueSelect", testQueueSelect),
+        ("testUnicodeFunctionsAreRegisteredOnQueueConnection", testUnicodeFunctionsAreRegisteredOnQueueConnection),
         ("testReadOnlyQueue", testReadOnlyQueue),
         ("testStressTest", testStressTest),
         ("testTransaction", testTransaction)
