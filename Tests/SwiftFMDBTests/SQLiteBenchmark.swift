@@ -14,7 +14,7 @@ class SQLiteBenchmark: SCDBTempDBTests {
 
     func testUnicodeLikePerformanceEvaluation() {
         #if SWIFTFMDB_ENABLE_SQLITE_BENCHMARKS
-#if FMUNICODE_ENABLE
+#if EnableUnicodeReplacement
         let implementationLabel = "SwiftFMDB replacement"
 #else
         let implementationLabel = "SQLite ICU"

@@ -4,7 +4,7 @@
 //  SQLite upper/lower callbacks for SwiftFMDB's Unicode replacement target.
 //
 
-#if FMUNICODE_ENABLE
+#if EnableUnicodeReplacement
 
 import Foundation
 import SQLiteEE

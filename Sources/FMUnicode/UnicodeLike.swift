@@ -17,7 +17,7 @@
 //  row.
 //
 
-#if FMUNICODE_ENABLE
+#if EnableUnicodeReplacement
 
 import SQLiteEE
 

@@ -1,4 +1,8 @@
-#if FMUNICODE_ENABLE
+#if EnableUnicodeReplacement && EnableSQLiteICU
+#error("EnableUnicodeReplacement and EnableSQLiteICU are mutually exclusive production configurations.")
+#endif
+
+#if EnableUnicodeReplacement
 import FMUnicode
 #endif
 
@@ -13,7 +17,7 @@ import RDSQLite3
 extension FMDatabase {
 
     internal func registerUnicodeFunctions() -> Int32 {
-        #if FMUNICODE_ENABLE
+        #if EnableUnicodeReplacement
         return registerUnicodeCallbacks(in: self.db)
         #else
         return SQLITE_OK

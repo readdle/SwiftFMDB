@@ -28,7 +28,7 @@ class SQLiteTests: SCDBTempDBTests {
             "ENABLE_FTS5",
             "ENABLE_RTREE",
         ]
-#if !FMUNICODE_ENABLE
+#if !EnableUnicodeReplacement
         shouldBeEnabledOptions.append("ENABLE_ICU")
 #endif
         
@@ -135,7 +135,7 @@ class SQLiteTests: SCDBTempDBTests {
     }
 
     func testUnicodeCaseFunctionsInExpressionIndex() {
-        #if FMUNICODE_ENABLE
+        #if EnableUnicodeReplacement
         XCTAssertTrue(db.executeUpdate(cached: false, "CREATE TABLE indexed_contacts (first_name TEXT);"))
         XCTAssertTrue(db.executeUpdate(cached: false, "INSERT INTO indexed_contacts (first_name) VALUES ('çoğunlukla'), ('ÇOĞUNLUKLA'), ('different');"))
         XCTAssertTrue(db.executeUpdate(cached: false, "CREATE INDEX idx_indexed_contacts_upper_name ON indexed_contacts(UPPER(first_name));"))

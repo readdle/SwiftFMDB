@@ -138,7 +138,7 @@ SWIFT_TEMPLATE = """\
 //  Source: {source_label}
 //
 
-#if FMUNICODE_ENABLE
+#if EnableUnicodeReplacement
 
 struct UnicodeFoldPair {{
     let source: UInt32

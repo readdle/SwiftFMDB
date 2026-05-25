@@ -2,6 +2,41 @@
 
 SwiftFMDB is pure swift version of FMDB.
 
+## Unicode configuration
+
+SwiftFMDB uses Swift Package traits for Unicode behavior. The default
+`EnableUnicodeReplacement` trait enables SwiftFMDB's Unicode `upper` / `lower`
+/ `like` replacement:
+
+```
+.package(url: "git@github.com:readdle/SwiftFMDB.git", branch: "main")
+```
+
+To use SQLite ICU instead, declare the dependency with only `EnableSQLiteICU`.
+
+```
+.package(
+    url: "git@github.com:readdle/SwiftFMDB.git",
+    branch: "main",
+    traits: ["EnableSQLiteICU"]
+)
+```
+
+To build with neither Unicode implementation, pass an empty trait set. This is
+mainly useful for sanity checks because SQLite then falls back to its built-in
+ASCII-only case functions:
+
+```
+.package(
+    url: "git@github.com:readdle/SwiftFMDB.git",
+    branch: "main",
+    traits: []
+)
+```
+
+`EnableUnicodeReplacement` and `EnableSQLiteICU` are mutually exclusive
+production configurations.
+
 ## Benchmarks
 
 Unicode benchmark bodies are disabled in the default test suite. Run them

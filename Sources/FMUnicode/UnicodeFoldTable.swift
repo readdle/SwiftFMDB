@@ -6,7 +6,7 @@
 //  Source: CaseFolding-17.0.0.txt (Date: 2025-07-30, 23:54:36 GMT)
 //
 
-#if FMUNICODE_ENABLE
+#if EnableUnicodeReplacement
 
 struct UnicodeFoldPair {
     let source: UInt32

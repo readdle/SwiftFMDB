@@ -4,7 +4,7 @@
 //  SQLite callback registration for SwiftFMDB's Unicode replacement target.
 //
 
-#if FMUNICODE_ENABLE
+#if EnableUnicodeReplacement
 
 import SQLiteEE
 
