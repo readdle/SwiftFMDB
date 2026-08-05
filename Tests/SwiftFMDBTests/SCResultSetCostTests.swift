@@ -108,4 +108,11 @@ public class SCResultSetCostTests: SCDBTempDBTests {
         XCTAssertFalse(db.hasOpenResultSets())
     }
 
+    public static var allTests = [
+        ("testResultSetAccumulatesEveryStep", testResultSetAccumulatesEveryStep),
+        ("testTotalTimeCoversWorkBetweenSteps", testTotalTimeCoversWorkBetweenSteps),
+        ("testUnsteppedResultSetHasNoCost", testUnsteppedResultSetHasNoCost),
+        ("testTotalTimeStopsAtClose", testTotalTimeStopsAtClose)
+    ]
+
 }
