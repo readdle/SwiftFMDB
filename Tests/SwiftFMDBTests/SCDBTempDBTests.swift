@@ -21,7 +21,13 @@ import XCTest
     private let populatedDatabasePath = "/tmp/tmp-populated.db"
 #endif
 
+#if !SWIFT_PACKAGE && os(Windows)
+// SQLite is built without the encryption extension there, so keying a database always fails. The key
+// is only scaffolding for these tests — an empty one keeps every case running, unencrypted.
+let encryptionKey = ""
+#else
 let encryptionKey = "encryption key"
+#endif
 
 // sourcery: disableTests
 public class SCDBTempDBTests: XCTestCase {
