@@ -17,6 +17,22 @@ import sqlite
 import RDSQLite3
 #endif
 
+func fmdbSeconds(_ time: TimeInterval) -> String {
+    return String(format: "%.3f", time)
+}
+
+func fmdbName(forPath path: String?) -> String {
+    guard let path = path, path.isEmpty == false else {
+        return ":memory:"
+    }
+
+    return URL(fileURLWithPath: path).lastPathComponent
+}
+
+func fmdbCallSite(fileID: String, line: Int, function: String) -> String {
+    return "\(fileID):\(line) \(function)"
+}
+
 /** Category of additions for `<FMDatabase>` class.
  
  ### See also

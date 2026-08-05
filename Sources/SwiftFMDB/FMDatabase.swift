@@ -505,10 +505,10 @@ public final class FMDatabase: NSObject {
             longQueryHandler?(sql, diff)
          
             if Thread.isMainThread {
-                logger.info("Query is executed too long (main thread), time: \(diff) sec query:\n\(sql)")
+                logger.info("Update is executed too long (main thread), time: \(fmdbSeconds(diff))sec, db: \(fmdbName(forPath: databasePath)) sql:\n\(sql)")
             }
             else if diff > 1 {
-                logger.info("Query is executed too long (back thread), time: \(diff) sec query:\n\(sql)")
+                logger.info("Update is executed too long (back thread), time: \(fmdbSeconds(diff))sec, db: \(fmdbName(forPath: databasePath)) sql:\n\(sql)")
             }
         }
         
@@ -990,6 +990,27 @@ public final class FMDatabase: NSObject {
     
     internal func resultSetDidClose(_ resultSet: FMResultSet) {
         openResultSets.remove(resultSet)
+        reportQueryCostIfNeeded(resultSet)
+    }
+
+    /// A query's cost is the whole iteration, not one step: timing a single `sqlite3_step` missed a query
+    /// that spent seconds across many fast steps, and reported a slow scan once per step.
+    private func reportQueryCostIfNeeded(_ resultSet: FMResultSet) {
+        let total = resultSet.totalTime
+        guard total > 0.1 else {
+            return
+        }
+
+        // Notified on the same budget as an update, before the per-thread logging thresholds below.
+        longQueryHandler?(resultSet.query ?? "", total)
+
+        let mainThread = Thread.isMainThread
+        guard mainThread || total > 1 else {
+            return
+        }
+
+        let thread = mainThread ? "main thread" : "back thread"
+        logger.info("Query is executed too long (\(thread)), time: \(fmdbSeconds(total))sec, db: \(fmdbName(forPath: databasePath)), steps: \(resultSet.stepCount) query:\n\(resultSet.query ?? "---")")
     }
     
     // MARK: Encryption methods

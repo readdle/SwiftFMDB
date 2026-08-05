@@ -23,6 +23,28 @@ public final class FMResultSet: NSObject {
     public var query: String?
     public var statement: FMStatement!
     private var _columnNameToIndexMap: [String: Int32]?
+
+    // MARK: Cost accounting
+    //
+    // Accumulated per result set so the parent database can report the whole query's cost on close.
+    // Touched only from the database's serial queue, same as the statement.
+
+    private(set) var stepCount: Int = 0
+
+    /// First step, not construction: the gap before iteration starts belongs to whoever asked for the
+    /// query, and statement preparation is skewed by a cold start.
+    private var effectiveAt: TimeInterval?
+    private var closedAt: TimeInterval?
+
+    /// Iteration from the first step until close. Zero while nobody has stepped, which is what keeps a
+    /// result set nobody used out of the cost report.
+    var totalTime: TimeInterval {
+        guard let effectiveAt = effectiveAt else {
+            return 0
+        }
+
+        return (closedAt ?? Date.timeIntervalSinceReferenceDate) - effectiveAt
+    }
     
     // MARK: Creating and closing database
     
@@ -52,6 +74,7 @@ public final class FMResultSet: NSObject {
     
     public func close() {
         if self.statement != nil {
+            self.closedAt = Date.timeIntervalSinceReferenceDate
             self.parentDB.resultSetDidClose(self)
             self.statement?.reset()
             self.statement = nil
@@ -73,7 +96,10 @@ public final class FMResultSet: NSObject {
     @discardableResult
     public func next() -> Bool {
         let t1 = Date.timeIntervalSinceReferenceDate
-        
+        if effectiveAt == nil {
+            effectiveAt = t1
+        }
+
         let rc = sqlite3_step(self.statement.statement)
         if SQLITE_BUSY == rc || SQLITE_LOCKED == rc {
             logger.error("\(#function):\(#line) Database busy (\(parentDB.databasePath ?? "---"))")
@@ -81,6 +107,7 @@ public final class FMResultSet: NSObject {
         }
         else if SQLITE_DONE == rc || SQLITE_ROW == rc {
             // all is well, let's return.
+            stepCount += 1
         }
         else if SQLITE_ERROR == rc {
             logger.error("Error calling sqlite3_step (\(rc): \(parentDB.lastErrorMessage() ?? "---")) rs")
@@ -93,21 +120,19 @@ public final class FMResultSet: NSObject {
             // wtf?
             logger.error("Unknown error calling sqlite3_step (\(rc): \(parentDB.lastErrorMessage() ?? "---"))  rs")
         }
+
+        let stepDuration = Date.timeIntervalSinceReferenceDate - t1
+        if stepDuration > 0.1 {
+            if Thread.isMainThread {
+                logger.info("Query step is executed too long (main thread), time: \(fmdbSeconds(stepDuration))sec, db: \(fmdbName(forPath: parentDB.databasePath)), rc:\(rc), query:\n\(query ?? "---")")
+            }
+            else if stepDuration > 1 {
+                logger.info("Query step is executed too long (back thread), time: \(fmdbSeconds(stepDuration))sec, db: \(fmdbName(forPath: parentDB.databasePath)), rc:\(rc), query:\n\(query ?? "---")")
+            }
+        }
+
         if rc != SQLITE_ROW {
             self.close()
-        }
-        
-        let t2 = Date.timeIntervalSinceReferenceDate
-        let diff = t2 - t1
-        if diff > 0.1 {
-            parentDB.longQueryHandler?(query ?? "", diff)
-            
-            if Thread.isMainThread {
-                logger.info("Query is executed too long (main thread), time: \(diff) sec query:\n\(query ?? "---"))")
-            }
-            else if diff > 1 {
-                logger.info("Query is executed too long (back thread), time: \(diff) sec query:\n\(query ?? "---"))")
-            }
         }
         
         if rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT, let dbCorruptionHandler = parentDB.dbCorruptionHandler {
