@@ -190,8 +190,12 @@ open class FMDatabaseQueue: NSObject {
      
      @param block The code to be run on the queue of `FMDatabaseQueue`
      */
-    open func inDatabase(_ block: @escaping (FMDatabase) -> Void) {
-        inDatabaseAsync(false, block: block)
+    open func inDatabase(_ block: @escaping (FMDatabase) -> Void,
+                         fileID: String = #fileID,
+                         line: Int = #line,
+                         function: String = #function)
+    {
+        inDatabaseAsync(false, block: block, fileID: fileID, line: line, function: function)
     }
     
     func beginTransaction(_ useDeferred: Bool, withBlock block: @escaping (_ db: FMDatabase, _ rollback: inout Bool) -> Void) {
@@ -220,8 +224,12 @@ open class FMDatabaseQueue: NSObject {
      
      @param block The code to be run on the queue of `FMDatabaseQueue`
      */
-    open func inTransaction(_ block: @escaping (_ db: FMDatabase, _ rolback: inout Bool) -> Void) {
-        inTransactionAsync(false, block: block)
+    open func inTransaction(_ block: @escaping (_ db: FMDatabase, _ rolback: inout Bool) -> Void,
+                            fileID: String = #fileID,
+                            line: Int = #line,
+                            function: String = #function)
+    {
+        inTransactionAsync(false, block: block, fileID: fileID, line: line, function: function)
     }
     
     /** Synchronously perform database operations on queue, using deferred transactions.
@@ -275,7 +283,12 @@ open class FMDatabaseQueue: NSObject {
         }
     }
     
-    func executeBlock(inQueue block: @escaping (_ db: FMDatabase) -> Void, async: Bool) {
+    func executeBlock(inQueue block: @escaping (_ db: FMDatabase) -> Void,
+                      async: Bool,
+                      fileID: String,
+                      line: Int,
+                      function: String)
+    {
         if throwAssertWhenExecutedOnMainThread && async == false && Thread.isMainThread {
             assert(false, "Remove db requests from main thread")
         }
@@ -290,37 +303,34 @@ open class FMDatabaseQueue: NSObject {
             }
             return
         }
-        var executionTime: Double = 0
-        let wt1 = Date.timeIntervalSinceReferenceDate
-        let blockWithExecutionTimt = { () -> Void in
-            let et1 = Date.timeIntervalSinceReferenceDate
+        let waitingTimeStart = Date.timeIntervalSinceReferenceDate
+        let blockWithExecutionTimt = { [self] () -> Void in
+            let executionTimeStart = Date.timeIntervalSinceReferenceDate
             if let database = self.database() {
                 block(database)
             }
             else {
                 //error
             }
-            let et2 = Date.timeIntervalSinceReferenceDate
-            executionTime = et2 - et1
+            let waitingTime = executionTimeStart - waitingTimeStart
+            if waitingTime > 0.1 && Thread.isMainThread {
+                logger.info("Db block was in wait too long (main thread), time: \(fmdbSeconds(waitingTime))sec, db: \(fmdbName(forPath: path)), at \(fmdbCallSite(fileID: fileID, line: line, function: function)) stack:\n\(getCallStackSymbols())")
+            }
+            let executionTime = Date.timeIntervalSinceReferenceDate - executionTimeStart
+            if executionTime > 0.1 {
+                if Thread.isMainThread {
+                    logger.info("Db block is executed too long (main thread), time: \(fmdbSeconds(executionTime))sec, db: \(fmdbName(forPath: path)), at \(fmdbCallSite(fileID: fileID, line: line, function: function)) stack:\n\(getCallStackSymbols())")
+                }
+                else if executionTime > 3 {
+                    logger.info("Db block is executed too long (back thread), time: \(fmdbSeconds(executionTime))sec, db: \(fmdbName(forPath: path)), at \(fmdbCallSite(fileID: fileID, line: line, function: function)) stack:\n\(getCallStackSymbols())")
+                }
+            }
         }
         if async {
             queue.async(execute: blockWithExecutionTimt)
         }
         else {
             queue.sync(execute: blockWithExecutionTimt)
-        }
-        let wt2 = Date.timeIntervalSinceReferenceDate
-        let waitingTime = wt2 - wt1
-        if executionTime > 0.1 {
-            if Thread.isMainThread {
-                logger.info("Db block is executed too long (main thread), time: \(Float(executionTime))sec stack:\n\(getCallStackSymbols())")
-            }
-            else if executionTime > 3 {
-                logger.info("Db block is executed too long (back thread), time: \(Float(executionTime))sec stack:\n\(getCallStackSymbols())")
-            }
-        }
-        else if waitingTime > 0.1 && Thread.isMainThread {
-            logger.info("Db block was in wait too long (main thread), time: \(Float(executionTime))sec stack:\n\(getCallStackSymbols())")
         }
     }
     
@@ -333,7 +343,15 @@ open class FMDatabaseQueue: NSObject {
         block(db)
     }
     
-    public func inDatabaseAsync(_ async: Bool, block: @escaping (_: FMDatabase) -> Void) {
+    // The call-site defaults below have to be FORWARDED by every layer, never left to default again:
+    // a layer that omits them reports its own declaration site instead of the caller's, which compiles
+    // cleanly and reads plausibly.
+    public func inDatabaseAsync(_ async: Bool,
+                                block: @escaping (_: FMDatabase) -> Void,
+                                fileID: String = #fileID,
+                                line: Int = #line,
+                                function: String = #function)
+    {
         if isNestedCall() {
             executeNestedBlock(block)
         }
@@ -341,11 +359,16 @@ open class FMDatabaseQueue: NSObject {
             executeBlock(inQueue: { db in
                 block(db)
                 self.checkOpenResultSets(db)
-            }, async: async)
+            }, async: async, fileID: fileID, line: line, function: function)
         }
     }
-    
-    public func inTransactionAsync(_ async: Bool, block: @escaping (_: FMDatabase, _: inout Bool) -> Void) {
+
+    public func inTransactionAsync(_ async: Bool,
+                                   block: @escaping (_: FMDatabase, _: inout Bool) -> Void,
+                                   fileID: String = #fileID,
+                                   line: Int = #line,
+                                   function: String = #function)
+    {
         if isNestedCall() {
             executeNestedBlock({ db in
                 self.execute(inTransaction: block, db: db)
@@ -355,7 +378,7 @@ open class FMDatabaseQueue: NSObject {
             executeBlock(inQueue: { db in
                 self.execute(inTransaction: block, db: db)
                 self.checkOpenResultSets(db)
-            }, async: async)
+            }, async: async, fileID: fileID, line: line, function: function)
         }
     }
     
