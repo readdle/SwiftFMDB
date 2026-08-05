@@ -1078,8 +1078,15 @@ public final class FMDatabase: NSObject {
     }
     
     private func setKey(_ dbName: String?, _ pKey: UnsafeRawPointer?, _ nKey: Int32) -> Bool {
+        #if !SWIFT_PACKAGE && os(Windows)
+        // The only configuration that imports the plain public amalgamation, which carries no codec
+        // and therefore no sqlite3_key_v2. An empty key is what FMDatabaseQueue passes on every open
+        // of an unencrypted database, so it has to keep succeeding; a real key cannot be honored.
+        return nKey == 0
+        #else
         let rc = sqlite3_key_v2(db, dbName, pKey, nKey)
         return (rc == SQLITE_OK)
+        #endif
     }
     
     /** Reset encryption key using `keyData`.
@@ -1105,11 +1112,16 @@ public final class FMDatabase: NSObject {
     }
     
     private func rekey(_ dbName: String?, _ pKey: UnsafeRawPointer?, _ nKey: Int32) -> Bool {
+        #if !SWIFT_PACKAGE && os(Windows)
+        // Same as setKey: no codec, so only the "no key" case can be honored.
+        return nKey == 0
+        #else
         let rc = sqlite3_rekey_v2(db, dbName, pKey, nKey)
         if rc != SQLITE_OK {
             logger.error("error on rekey: \(rc), error message = \(self.lastErrorMessage() ?? "undefined")")
         }
         return (rc == SQLITE_OK)
+        #endif
     }
     
     // MARK: Retrieving error codes
