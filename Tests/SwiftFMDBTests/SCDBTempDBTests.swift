@@ -80,5 +80,18 @@ public class SCDBTempDBTests: XCTestCase {
     }
     
     public class func populateDatabase(_ db: FMDatabase) {}
+
+    func stringValue(for sql: String, file: StaticString = #file, line: UInt = #line) -> String? {
+        return stringValue(in: db, for: sql, file: file, line: line)
+    }
+
+    func stringValue(in db: FMDatabase, for sql: String, file: StaticString = #file, line: UInt = #line) -> String? {
+        let rs = db.executeQuery(cached: false, sql)
+        XCTAssertNotNil(rs, file: file, line: line)
+        defer { rs?.close() }
+
+        XCTAssertEqual(rs?.next(), true, file: file, line: line)
+        return rs?.string(forColumnIndex: 0)
+    }
     
 }

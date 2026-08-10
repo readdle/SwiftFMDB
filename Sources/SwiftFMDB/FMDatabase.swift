@@ -192,6 +192,12 @@ public final class FMDatabase: NSObject {
             let maxBusyRetryTimeInterval = self.maxBusyRetryTimeInterval
             self.maxBusyRetryTimeInterval = maxBusyRetryTimeInterval
         }
+        let unicodeRegistrationResult = self.registerUnicodeFunctions()
+        if unicodeRegistrationResult != SQLITE_OK {
+            logger.error("error registering Unicode functions!: \(unicodeRegistrationResult)")
+            _ = self.close()
+            return false
+        }
         return true
     }
     
@@ -232,6 +238,12 @@ public final class FMDatabase: NSObject {
             // set the handler (trick for Swift propery didSet)
             let maxBusyRetryTimeInterval = self.maxBusyRetryTimeInterval
             self.maxBusyRetryTimeInterval = maxBusyRetryTimeInterval
+        }
+        let unicodeRegistrationResult = self.registerUnicodeFunctions()
+        if unicodeRegistrationResult != SQLITE_OK {
+            logger.error("error registering Unicode functions!: \(unicodeRegistrationResult)")
+            _ = self.close()
+            return false
         }
         return true
 
@@ -1604,10 +1616,6 @@ fileprivate final class FMDBSQLiteCallback<T> {
     
     fileprivate init(block: T?) {
         self.block = block
-    }
-    
-    fileprivate func clear() {
-        self.block = nil
     }
 }
 
