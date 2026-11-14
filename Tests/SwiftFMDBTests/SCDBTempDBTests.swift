@@ -16,6 +16,9 @@ import XCTest
 #elseif os(Windows)
     private let testDatabasePath = FileManager.default.temporaryDirectory.appendingPathComponent("tmp.db").path
     private let populatedDatabasePath = FileManager.default.temporaryDirectory.appendingPathComponent("tmp-populated.db").path
+#elseif os(Linux)
+    private let testDatabasePath = "/tmp/tmp.db"
+    private let populatedDatabasePath = "/tmp/tmp-populated.db"
 #else
     private let testDatabasePath = "/private/tmp/tmp.db"
     private let populatedDatabasePath = "/tmp/tmp-populated.db"

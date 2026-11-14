@@ -1,6 +1,6 @@
 name: Test
 
-on: 
+on:
   pull_request:
   workflow_dispatch:
 
@@ -12,6 +12,9 @@ concurrency:
   group: ${{ github.ref }}
   cancel-in-progress: true
 
+# swift-sqlite-ee is private and cloned over SSH, so every job loads SSH_KEY into
+# ssh-agent. SwiftFMDB is public and can't use the private spark-actions workflow
+# or its install-ssh-key action, so the jobs are spelled out here.
 jobs:
   macos:
     name: "macOS"
@@ -20,8 +23,22 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Start ssh-agent
+      env:
+        SSH_KEY: ${{ secrets.SSH_KEY }}
+      run: |
+        set -eo pipefail
+        eval "$(ssh-agent -s)" > /dev/null
+        printf '%s\n' "$SSH_KEY" | ssh-add -
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+        echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+        mkdir -p ~/.ssh && chmod 700 ~/.ssh
+        ssh-keygen -F github.com > /dev/null || ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
     - name: Build tests
       run: swift build --build-tests
+
     - name: Run tests
       run: |
         set -eo pipefail
@@ -38,25 +55,72 @@ jobs:
         if-no-files-found: warn
         retention-days: 3
 
+    - name: Stop ssh-agent
+      if: ${{ always() }}
+      run: ssh-agent -k > /dev/null || true
+
   ios:
     name: "iOS"
     runs-on: [macOS, apple, spark]
     timeout-minutes: 60
+    env:
+      XCSCHEME: SwiftFMDB
 
     steps:
     - uses: actions/checkout@v4
-    - name: Detect build destination
+
+    - name: Start ssh-agent
+      env:
+        SSH_KEY: ${{ secrets.SSH_KEY }}
       run: |
         set -eo pipefail
-        XCDESTINATION_DEVICE="$(xcodebuild -scheme SwiftFMDB -showdestinations | grep -o 'iPhone [0-9]\+ }' | tail -n 1 | sed 's/ }$//')"
-        echo "XCDESTINATION_DEVICE=$XCDESTINATION_DEVICE" >> $GITHUB_ENV
+        eval "$(ssh-agent -s)" > /dev/null
+        printf '%s\n' "$SSH_KEY" | ssh-add -
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+        echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+        mkdir -p ~/.ssh && chmod 700 ~/.ssh
+        ssh-keygen -F github.com > /dev/null || ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+    # Tests need a concrete simulator. Take the last available iPhone by its id:
+    # simulator names differ between Xcode versions, so matching on a name
+    # pattern such as "iPhone 16" breaks when the runners update Xcode.
+    # A runner can have the iOS runtime installed but no iPhone created for it,
+    # so create one then, named so that the detection finds it on later runs.
+    - name: Detect test destination
+      run: |
+        set -eo pipefail
+        XCDESTINATION_ID="$(xcodebuild -scheme $XCSCHEME -showdestinations 2>/dev/null \
+          | grep -v 'error:' \
+          | sed -n 's/.*platform:iOS Simulator,.*id:\([^,]*\),.*name:iPhone.*/\1/p' \
+          | tail -n 1)" || true
+        if [[ -z "$XCDESTINATION_ID" ]]; then
+          RUNTIME="$(xcrun simctl list runtimes available \
+            | sed -n 's/^iOS .* - \(com\.apple\.CoreSimulator\.SimRuntime\.iOS-[^ ]*\)$/\1/p' \
+            | tail -n 1)" || true
+          # Device types are listed newest first; take the first one the runtime supports
+          for DEVICE_TYPE in $(xcrun simctl list devicetypes \
+            | sed -n 's/^iPhone .*(\(com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-[^)]*\))$/\1/p'); do
+            if XCDESTINATION_ID="$(xcrun simctl create "iPhone CI" "$DEVICE_TYPE" "$RUNTIME" 2>/dev/null)"; then
+              echo "Created simulator iPhone CI ($DEVICE_TYPE, $RUNTIME)"
+              break
+            fi
+          done
+        fi
+        if [[ -z "$XCDESTINATION_ID" ]]; then
+          echo "::error::No iPhone simulator is available on this runner and none could be created."
+          xcrun simctl list runtimes
+          xcrun simctl list devices available
+          exit 1
+        fi
+        echo "Test destination: $XCDESTINATION_ID"
+        echo "XCDESTINATION_ID=$XCDESTINATION_ID" >> $GITHUB_ENV
 
     - name: Build tests
       run: |
         set -eo pipefail
         xcodebuild build-for-testing \
-          -scheme SwiftFMDB \
-          -destination "platform=iOS Simulator,name=$XCDESTINATION_DEVICE" \
+          -scheme $XCSCHEME \
+          -destination "id=$XCDESTINATION_ID" \
           | tee build.log \
           | xcbeautify --disable-logging
 
@@ -64,8 +128,8 @@ jobs:
       run: |
         set -eo pipefail
         xcodebuild test-without-building \
-          -scheme SwiftFMDB \
-          -destination "platform=iOS Simulator,name=$XCDESTINATION_DEVICE" \
+          -scheme $XCSCHEME \
+          -destination "id=$XCDESTINATION_ID" \
           | tee test.log \
           | xcbeautify --disable-logging
 
@@ -78,14 +142,31 @@ jobs:
         if-no-files-found: warn
         retention-days: 3
 
+    - name: Stop ssh-agent
+      if: ${{ always() }}
+      run: ssh-agent -k > /dev/null || true
+
   android:
     name: "Android"
-    runs-on: [self-hosted, macOS, ARM64, AndroidSwift6]
+    runs-on: [self-hosted, macOS, ARM64, spark-android]
     timeout-minutes: 60
 
     steps:
     - uses: actions/checkout@v4
-    - name: Run android tests
+
+    - name: Start ssh-agent
+      env:
+        SSH_KEY: ${{ secrets.SSH_KEY }}
+      run: |
+        set -eo pipefail
+        eval "$(ssh-agent -s)" > /dev/null
+        printf '%s\n' "$SSH_KEY" | ssh-add -
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+        echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+        mkdir -p ~/.ssh && chmod 700 ~/.ssh
+        ssh-keygen -F github.com > /dev/null || ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+    - name: Run tests
       run: |
         set -ex
 
@@ -93,18 +174,19 @@ jobs:
         export LANG=en_US.UTF-8
         export LC_ALL=en_US.UTF-8
 
-        export SWIFT_ANDROID_HOME=$SWIFT_ANDROID_HOME_6_1
         export SWIFT_ANDROID_API_LEVEL=29
         export SWIFT_ANDROID_ARCH=aarch64
-        export ANDROID_NDK=$ANDROID_NDK_ROOT_27C
+        # Swift 6.4 SDK, NDK r30 and swift-android-buildtools locations come from the runner environment
+        export SWIFT_ANDROID_SDK_HOME=${SWIFT_ANDROID_SDK_HOME_6_4:?is not set on this runner}
+        export ANDROID_NDK=${ANDROID_NDK_ROOT_30:?is not set on this runner}
         export ANDROID_NDK_ROOT=$ANDROID_NDK
         export ANDROID_NDK_HOME=$ANDROID_NDK
 
         export PATH=$ANDROID_NDK:$PATH
-        export PATH=$SWIFT_ANDROID_HOME/build-tools:$PATH
+        export PATH=${SWIFT_ANDROID_BUILDTOOLS_HOME:?is not set on this runner}:$PATH
 
         export EMULATOR_PORT=5558
-        export EMULATOR_SDK_VERSION=29
+        export EMULATOR_SDK_VERSION=36
         export EMULATOR_ARCH=arm64-v8a
         export EMULATOR_NAME=ci-test-$EMULATOR_SDK_VERSION-$EMULATOR_PORT
         export ANDROID_SERIAL=emulator-$EMULATOR_PORT
@@ -139,7 +221,9 @@ jobs:
         mkdir -p .build/reports
         adb logcat | ndk-stack -sym .build/debug > .build/reports/ndk-stack.log &
 
-        swift-android test --deploy -Xbuild -Xswiftc -Xbuild -DUNIT_TESTS
+        # SwiftPM 6.4 defaults to Swift Build, which rejects xcframework dependencies
+        # on Android. Look for SDKs only next to the 6.4 SDK, not in the default folder.
+        swift-android test --deploy -Xbuild --build-system -Xbuild native -Xbuild --swift-sdks-path -Xbuild "$(dirname "$SWIFT_ANDROID_SDK_HOME")" -Xbuild -Xswiftc -Xbuild -DUNIT_TESTS
         swift-android test --just-run | tee .build/reports/test.log
         return_code=${pipestatus[1]}
 
@@ -156,3 +240,55 @@ jobs:
         path: '.build/reports/*'
         if-no-files-found: warn
         retention-days: 3
+
+    - name: Stop ssh-agent
+      if: ${{ always() }}
+      run: ssh-agent -k > /dev/null || true
+
+  linux:
+    name: "Linux"
+    runs-on: [self-hosted, Linux, sparkbackend-dev]
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash -l {0}
+    # Spark manifests switch to their Linux dependency set on BUILD_LINUX and -DTARGET_LINUX
+    env:
+      BUILD_LINUX: 1
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Start ssh-agent
+      env:
+        SSH_KEY: ${{ secrets.SSH_KEY }}
+      run: |
+        set -eo pipefail
+        eval "$(ssh-agent -s)" > /dev/null
+        printf '%s\n' "$SSH_KEY" | ssh-add -
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+        echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+        mkdir -p ~/.ssh && chmod 700 ~/.ssh
+        ssh-keygen -F github.com > /dev/null || ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+    - name: Build tests
+      run: swift build --build-tests -Xmanifest -DTARGET_LINUX
+
+    - name: Run tests
+      run: |
+        set -eo pipefail
+        swift test --skip-build -Xmanifest -DTARGET_LINUX \
+          | tee test.log
+
+    - name: Upload logs
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: logs-linux
+        path: '*.log'
+        if-no-files-found: warn
+        retention-days: 3
+
+    - name: Stop ssh-agent
+      if: ${{ always() }}
+      run: ssh-agent -k > /dev/null || true
